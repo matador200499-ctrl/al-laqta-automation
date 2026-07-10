@@ -45,8 +45,3 @@ jobs:
         with:
           name: video-result
           path: final_video.mp4
-- name: Install dependencies
-  run: |
-    python -m pip install --upgrade pip
-    pip install gTTS
-    pip install -r requirements.txt
