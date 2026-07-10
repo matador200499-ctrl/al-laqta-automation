@@ -38,11 +38,10 @@ jobs:
         if: ${{ inputs.manual_topic != '' }}
         run: echo "VIDEO_TOPIC=${{ inputs.manual_topic }}" >> "$GITHUB_ENV"
 
-      - name: Generate script with Claude
+      - name: Generate script with Grok
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          XAI_API_KEY: ${{ secrets.XAI_API_KEY }}
         run: python scripts/generate_script.py
-
       - name: Generate voiceover (edge-tts)
         run: python scripts/generate_voice.py
 
