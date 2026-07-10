@@ -84,8 +84,3 @@ jobs:
             upload_result.json
             final_video.mp4
           retention-days: 7
-
-  push:
-    branches:
-      - main
-  workflow_dispatch:
