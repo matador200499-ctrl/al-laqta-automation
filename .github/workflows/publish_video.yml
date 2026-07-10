@@ -1,6 +1,39 @@
-- name: Run Automation Scripts
+name: Publish Video Automated
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch: 
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+      YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
+      YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
+      YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run Automation Scripts
         env:
           MANUAL_TOPIC: ${{ github.event.inputs.manual_topic }}
         run: |
           python scripts/generate_script.py
-          # ... باقي السكربتات
+          python scripts/generate_voice.py
+          python scripts/fetch_clips.py
+          python scripts/assemble_video.py
+          python scripts/upload_youtube.py
