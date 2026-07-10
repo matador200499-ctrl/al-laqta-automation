@@ -26,13 +26,15 @@ jobs:
           python-version: "3.11"
 
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: |
+          python -m pip install --upgrade pip
+          pip install gTTS requests google-generativeai pexels-api moviepy
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
       - name: Run Automation Scripts
         env:
           MANUAL_TOPIC: ${{ github.event.inputs.manual_topic }}
         run: |
-          # نتحرك للمجلد الرئيسي عشان السكريبتات تلاقي ملفاتها
           python scripts/generate_script.py
           python scripts/generate_voice.py
           python scripts/fetch_clips.py
