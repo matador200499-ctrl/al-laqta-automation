@@ -1,27 +1,19 @@
-"""
-generate_voice.py
-يولّد تعليق صوتي عربي لكل مشهد باستخدام edge-tts (خدمة تحويل نص لصوت مجانية،
-تعتمد على أصوات Microsoft Edge العصبية عالية الجودة).
-
-بيقرأ المشاهد من script.json، وينتج لكل مشهد ملف صوت في audio/scene_N.mp3
-+ ملف durations.json فيه مدة كل مشهد بالثواني (هيستخدمها سكريبت التجميع
-لمعرفة طول كل مقطع فيديو ستوك مطلوب).
-"""
-
 import asyncio
 import json
 import os
 import subprocess
+from pathlib import Path
 
-VOICE = os.environ.get("TTS_VOICE", "ar-EG-ShakirNeural")  # صوت عربي مصري رجالي
-# أصوات عربية بديلة: ar-EG-SalmaNeural (مصري حريمي) / ar-SA-HamedNeural / ar-SA-ZariyahNeural
-
+# تحديد المسار الرئيسي للمشروع عشان أي ملف يدور عليه يلاقيه
+BASE_DIR = Path(__file__).resolve().parent.parent
+VOICE = os.environ.get("TTS_VOICE", "ar-EG-ShakirNeural")
 
 async def synthesize(text: str, out_path: str):
     import edge_tts
+    # التأكد أن المجلد اللي هيتحفظ فيه الصوت موجود
+    os.makedirs(os.path.dirname(out_path), exist_ok=True)
     communicate = edge_tts.Communicate(text, VOICE, rate="+0%")
     await communicate.save(out_path)
-
 
 def get_duration(path: str) -> float:
     result = subprocess.run(
@@ -31,28 +23,34 @@ def get_duration(path: str) -> float:
     )
     return float(result.stdout.strip())
 
-
 async def main():
-    with open("script.json", "r", encoding="utf-8") as f:
+    # استخدام المسار الكامل للملف لضمان العثور عليه
+    script_path = BASE_DIR / "script.json"
+    
+    with open(script_path, "r", encoding="utf-8") as f:
         script = json.load(f)
 
-    os.makedirs("audio", exist_ok=True)
+    # إنشاء المجلدات باستخدام المسار الكامل
+    audio_dir = BASE_DIR / "audio"
+    os.makedirs(audio_dir, exist_ok=True)
+    
     durations = []
 
     for i, scene in enumerate(script["scenes"]):
-        out_path = f"audio/scene_{i}.mp3"
+        out_path = audio_dir / f"scene_{i}.mp3"
         print(f"جاري توليد صوت المشهد {i + 1}/{len(script['scenes'])}...")
-        await synthesize(scene["narration"], out_path)
-        dur = get_duration(out_path)
+        await synthesize(scene["narration"], str(out_path))
+        dur = get_duration(str(out_path))
         durations.append(dur)
         print(f"  المدة: {dur:.2f} ثانية")
 
-    with open("audio/durations.json", "w", encoding="utf-8") as f:
+    # حفظ ملف المدد في مجلد الـ audio
+    durations_path = audio_dir / "durations.json"
+    with open(durations_path, "w", encoding="utf-8") as f:
         json.dump(durations, f)
 
     total = sum(durations)
-    print(f"\nإجمالي مدة الصوت: {total:.1f} ثانية (~{total / 60:.1f} دقيقة)")
-
+    print(f"\nإجمالي مدة الصوت: {total:.1f} ثانية")
 
 if __name__ == "__main__":
     asyncio.run(main())
