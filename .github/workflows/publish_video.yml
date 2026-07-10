@@ -32,8 +32,16 @@ jobs:
         env:
           MANUAL_TOPIC: ${{ github.event.inputs.manual_topic }}
         run: |
+          # نتحرك للمجلد الرئيسي عشان السكريبتات تلاقي ملفاتها
           python scripts/generate_script.py
           python scripts/generate_voice.py
           python scripts/fetch_clips.py
           python scripts/assemble_video.py
           python scripts/upload_youtube.py
+
+      - name: Upload artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: video-result
+          path: final_video.mp4
