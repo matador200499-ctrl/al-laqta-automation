@@ -1,0 +1,18 @@
+client_secrets.json
+token.json
+*.pyc
+__pycache__/
+.env
+
+# ملفات مؤقتة بيتولدها النظام أثناء التشغيل، مش لازم تتحفظ في الريبو
+audio/
+clips/
+segments/
+segments_tmp/
+overlays/
+video_only.mp4
+full_audio.mp3
+final_video.mp4
+script.json
+content.json
+upload_result.json
