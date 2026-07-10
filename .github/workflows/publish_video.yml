@@ -18,12 +18,14 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: {python-version: "3.11"}
-      - run: pip install gTTS requests google-generativeai pexels-api moviepy edge-tts
+      - run: |
+          pip install gTTS requests google-generativeai pexels-api moviepy edge-tts
+          sudo apt-get update && sudo apt-get install -y ffmpeg
       
       - name: Run Scripts
         run: |
-          python scripts/generate_script.py
-          python scripts/generate_voice.py
-          python scripts/fetch_clips.py
-          python scripts/assemble_video.py
-          python scripts/upload_youtube.py
+          python3 scripts/generate_script.py
+          python3 scripts/generate_voice.py
+          python3 scripts/fetch_clips.py
+          python3 scripts/assemble_video.py
+          python3 scripts/upload_youtube.py
