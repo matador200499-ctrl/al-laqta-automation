@@ -1,11 +1,9 @@
 """
 generate_voice.py
-يولّد تعليق صوتي عربي لكل مشهد باستخدام edge-tts (خدمة تحويل نص لصوت مجانية،
-تعتمد على أصوات Microsoft Edge العصبية عالية الجودة).
+يولّد تعليق صوتي عربي لكل مشهد باستخدام edge-tts (خدمة تحويل نص لصوت مجانية).
 
 بيقرأ المشاهد من script.json، وينتج لكل مشهد ملف صوت في audio/scene_N.mp3
-+ ملف durations.json فيه مدة كل مشهد بالثواني (هيستخدمها سكريبت التجميع
-لمعرفة طول كل مقطع فيديو ستوك مطلوب).
++ ملف durations.json فيه مدة كل مشهد بالثواني.
 """
 
 import asyncio
@@ -13,8 +11,7 @@ import json
 import os
 import subprocess
 
-VOICE = os.environ.get("TTS_VOICE", "ar-EG-ShakirNeural")  # صوت عربي مصري رجالي
-# أصوات عربية بديلة: ar-EG-SalmaNeural (مصري حريمي) / ar-SA-HamedNeural / ar-SA-ZariyahNeural
+VOICE = os.environ.get("TTS_VOICE", "ar-EG-ShakirNeural")
 
 
 async def synthesize(text: str, out_path: str):
