@@ -1,9 +1,91 @@
-name: Publish Video Automated
+name: Publish Video (Automated)
 
+on:
+  schedule:
+    # 4 مرات يوميًا: الساعة 6ص، 12ظ، 6م، 12م بتوقيت UTC
+    # عدّل الأوقات دي حسب توقيتك المفضل (UTC+2 مصر صيفًا => اطرح ساعتين من التوقيت المصري)
+    - cron: "0 4,10,16,22 * * *"
+  workflow_dispatch:
+    inputs:
+      manual_topic:
+        description: "(اختياري) موضوع محدد بدل الموضوع التالي في القائمة"
+        required: false
+        type: string
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install system dependencies (ffmpeg + Arabic fonts)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg fonts-noto fonts-noto-cjk fonts-hosny-amiri
+
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
+
+      - name: Pick next topic
+        if: ${{ inputs.manual_topic == '' }}
+        run: python pick_topic.py
+
+      - name: Use manual topic
+        if: ${{ inputs.manual_topic != '' }}
+        run: echo "VIDEO_TOPIC=${{ inputs.manual_topic }}" >> "$GITHUB_ENV"
+
+      - name: Generate script with Claude
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: python scripts/generate_script.py
+
+      - name: Generate voiceover (edge-tts)
+        run: python scripts/generate_voice.py
+
+      - name: Fetch stock video clips (Pexels)
+        env:
+          PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+        run: python scripts/fetch_clips.py
+
+      - name: Assemble final video
+        run: python scripts/assemble_video.py
+
+      - name: Upload video to YouTube
+        env:
+          YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
+          YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
+          YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
+          VIDEO_PATH: final_video.mp4
+          PRIVACY_STATUS: "public"
+        run: python scripts/upload_youtube.py
+
+      - name: Commit topic queue changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add topics.txt used_topics.txt
+          git commit -m "تحديث قائمة المواضيع بعد نشر فيديو تلقائي" || echo "لا يوجد تغييرات"
+          git push
+
+      - name: Save run details as artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: publish-details
+          path: |
+            script.json
+            content.json
+            upload_result.json
+            final_video.mp4
+          retention-days: 7
 on:
   push:
     branches:
       - main
-  workflow_dispatch: 
-
-# كمل باقي الكود بتاعك (Jobs و Steps) تحت هنا...
+  workflow_dispatch:
