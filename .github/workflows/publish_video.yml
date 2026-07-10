@@ -1,9 +1,7 @@
 name: Publish Video Automated
-
 on:
   push:
-    branches:
-      - main
+    branches: [main]
   workflow_dispatch: 
 
 jobs:
@@ -17,33 +15,15 @@ jobs:
       YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
 
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install gTTS requests google-generativeai pexels-api moviepy
-          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-
-      - name: Run Automation Scripts
-        env:
-          MANUAL_TOPIC: ${{ github.event.inputs.manual_topic }}
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.11"}
+      - run: pip install gTTS requests google-generativeai pexels-api moviepy edge-tts
+      
+      - name: Run Scripts
         run: |
           python scripts/generate_script.py
           python scripts/generate_voice.py
           python scripts/fetch_clips.py
           python scripts/assemble_video.py
           python scripts/upload_youtube.py
-
-      - name: Upload artifact
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: video-result
-          path: final_video.mp4
