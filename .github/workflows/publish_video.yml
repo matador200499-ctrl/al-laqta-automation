@@ -24,7 +24,10 @@ jobs:
       
       - name: Run Scripts
         run: |
+          # نتحرك للمجلد الرئيسي ونشغل السكريبتات بالترتيب
           python3 scripts/generate_script.py
+          # ننتظر ثانية للتأكد من حفظ الملف
+          sleep 2
           python3 scripts/generate_voice.py
           python3 scripts/fetch_clips.py
           python3 scripts/assemble_video.py
