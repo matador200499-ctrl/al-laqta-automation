@@ -15,7 +15,7 @@ import os
 import subprocess
 
 import arabic_reshaper
-from bidi.layout import get_display
+from bidi.algorithm import get_display
 from PIL import Image, ImageDraw, ImageFont
 
 WIDTH, HEIGHT = 1920, 1080
