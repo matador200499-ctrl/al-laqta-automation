@@ -54,7 +54,7 @@ def main():
     raw_text = response.choices[0].message.content.strip()
     cleaned = re.sub(r"^```json\s*|\s*```$", "", raw_text)
     try:
-        data = json.loads(cleaned)
+        data = json.loads(cleaned, strict=False)
     except json.JSONDecodeError as e:
         print(f"خطأ: تعذر تفسير مخرجات Groq كـ JSON: {e}", file=sys.stderr)
         print(raw_text, file=sys.stderr)
