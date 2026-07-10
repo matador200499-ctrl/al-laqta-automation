@@ -47,7 +47,9 @@ def main():
     response = client.chat.completions.create(
         model="llama-3.3-70b-versatile",
         messages=[{"role": "user", "content": build_prompt(topic)}],
-        max_tokens=4000,
+        max_tokens=8000,
+        response_format={"type": "json_object"},
+    )
     )
     raw_text = response.choices[0].message.content.strip()
     cleaned = re.sub(r"^```json\s*|\s*```$", "", raw_text)
