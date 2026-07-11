@@ -50,10 +50,8 @@ def main():
         max_tokens=8000,
         response_format={"type": "json_object"},
     )
-    )
-   raw_text = response.choices[0].message.content.strip()
+    raw_text = response.choices[0].message.content.strip()
     cleaned = re.sub(r"^```json\s*|\s*```$", "", raw_text)
-    # استخراج الجزء بين أول { وآخر } فقط، وتنظيف الرموز التالفة
     match = re.search(r"\{.*\}", cleaned, re.DOTALL)
     if match:
         cleaned = match.group(0)
