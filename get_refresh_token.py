@@ -1,28 +1,31 @@
-"""
-get_refresh_token.py
-
-شغّل الملف ده مرة واحدة بس، على جهازك الشخصي (مش على GitHub Actions).
-هيفتحلك متصفح تسجّل دخول بيه بحساب يوتيوب بتاع القناة، وهيطلع لك refresh token
-تحطه بعدين كـ Secret اسمه YT_REFRESH_TOKEN في إعدادات الريبو.
-
-الشرط: يكون عندك ملف client_secrets.json (نزّلته من Google Cloud Console)
-في نفس المجلد ده.
-"""
-
 from google_auth_oauthlib.flow import InstalledAppFlow
 
 SCOPES = ["https://www.googleapis.com/auth/youtube.upload"]
 
+flow = InstalledAppFlow.from_client_secrets_file(
+    "client_secret.json",
+    SCOPES
+)
 
-def main():
-    flow = InstalledAppFlow.from_client_secrets_file("client_secrets.json", SCOPES)
-    creds = flow.run_local_server(port=0)
+creds = flow.run_local_server(
+    host="localhost",
+    port=8080,
+    authorization_prompt_message="سيتم فتح المتصفح لتسجيل الدخول إلى Google...",
+    success_message="تمت الموافقة بنجاح. يمكنك إغلاق هذه الصفحة والعودة إلى البرنامج.",
+    open_browser=True
+)
 
-    print("\n\nتم بنجاح! خد البيانات دي وحطها في GitHub Secrets:\n")
-    print(f"YT_CLIENT_ID={creds.client_id}")
-    print(f"YT_CLIENT_SECRET={creds.client_secret}")
-    print(f"YT_REFRESH_TOKEN={creds.refresh_token}")
+print("\n" + "=" * 60)
+print("YT_CLIENT_ID")
+print(creds.client_id)
+print("=" * 60)
 
+print("\n" + "=" * 60)
+print("YT_CLIENT_SECRET")
+print(creds.client_secret)
+print("=" * 60)
 
-if __name__ == "__main__":
-    main()
+print("\n" + "=" * 60)
+print("YT_REFRESH_TOKEN")
+print(creds.refresh_token)
+print("=" * 60)
