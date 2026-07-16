@@ -50,7 +50,7 @@ jobs:
           VIDEO_PATH: final_video.mp4
           PRIVACY_STATUS: "public"
         run: python scripts/upload_youtube.py
-      -      - name: Commit topic queue changes
+      - name: Commit topic queue changes
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
