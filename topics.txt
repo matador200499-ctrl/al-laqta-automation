@@ -1,0 +1,52 @@
+import random
+import os
+import json
+
+def pick_topic():
+    topics_file = 'topics.txt'
+    history_file = 'selected_topics.json'
+    
+    # التأكد من وجود ملف المواضيع
+    if not os.path.exists(topics_file):
+        print(f"خطأ: ملف {topics_file} غير موجود!")
+        exit(1)
+            
+    # قراءة كل المواضيع
+    with open(topics_file, 'r', encoding='utf-8') as f:
+        all_topics = [line.strip() for line in f if line.strip()]
+        
+    if not all_topics:
+        print("خطأ: قائمة المواضيع فاضية! ضيف مواضيع جديدة في topics.txt")
+        exit(1)
+        
+    # تحميل تاريخ المواضيع المختارة
+    selected_topics = []
+    if os.path.exists(history_file):
+        try:
+            with open(history_file, 'r', encoding='utf-8') as f:
+                selected_topics = json.load(f)
+        except:
+            selected_topics = []
+
+    # تحديد المواضيع المتاحة (التي لم يتم اختيارها بعد)
+    available_topics = [t for t in all_topics if t not in selected_topics]
+    
+    # إذا انتهت كل المواضيع، نصفر التاريخ ونبدأ من جديد
+    if not available_topics:
+        print("--- تم اختيار جميع المواضيع! إعادة ضبط القائمة... ---")
+        available_topics = all_topics
+        selected_topics = []
+
+    # اختيار موضوع عشوائي من المتاح
+    topic = random.choice(available_topics)
+    selected_topics.append(topic)
+    
+    # حفظ التاريخ المحدث
+    with open(history_file, 'w', encoding='utf-8') as f:
+        json.dump(selected_topics, f, ensure_ascii=False, indent=4)
+        
+    print(f"الموضوع المختار هو: {topic}")
+    print(f"عدد المواضيع المتبقية: {len(available_topics) - 1}")
+
+if __name__ == "__main__":
+    pick_topic()
