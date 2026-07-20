@@ -18,3 +18,4 @@ import random
 import os
 import json
 def pick_topic():
+topics_file = 'topics.txt'
