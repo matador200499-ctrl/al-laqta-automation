@@ -21,3 +21,4 @@ def pick_topic():
 topics_file = 'topics.txt'
 history_file = 'selected_topics.json'
 # التأكد من وجود ملف المواضيع
+if not os.path.exists(topics_file):

@@ -1,4 +1,3 @@
-if not os.path.exists(topics_file):
 print(f"خطأ: ملف {topics_file} غير موجود!")
 exit(1)
 # قراءة كل المواضيع
