@@ -25,3 +25,4 @@ if not os.path.exists(topics_file):
 print(f"خطأ: ملف {topics_file} غير موجود!")
 exit(1)
 # قراءة كل المواضيع
+with open(topics_file, 'r', encoding='utf-8') as f:
