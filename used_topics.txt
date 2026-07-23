@@ -29,3 +29,4 @@ with open(topics_file, 'r', encoding='utf-8') as f:
 all_topics = [line.strip() for line in f if line.strip()]
 if not all_topics:
 print("خطأ: قائمة المواضيع فاضية! ضيف مواضيع جديدة في topics.txt")
+exit(1)
