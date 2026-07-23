@@ -31,3 +31,4 @@ if not all_topics:
 print("خطأ: قائمة المواضيع فاضية! ضيف مواضيع جديدة في topics.txt")
 exit(1)
 # تحميل تاريخ المواضيع المختارة
+selected_topics = []
