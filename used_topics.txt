@@ -33,3 +33,4 @@ exit(1)
 # تحميل تاريخ المواضيع المختارة
 selected_topics = []
 if os.path.exists(history_file):
+try:
