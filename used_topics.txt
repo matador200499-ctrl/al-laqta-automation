@@ -34,3 +34,4 @@ exit(1)
 selected_topics = []
 if os.path.exists(history_file):
 try:
+with open(history_file, 'r', encoding='utf-8') as f:

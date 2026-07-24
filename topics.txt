@@ -1,4 +1,3 @@
-with open(history_file, 'r', encoding='utf-8') as f:
 selected_topics = json.load(f)
 except:
 selected_topics = []
