@@ -1,4 +1,3 @@
-selected_topics = json.load(f)
 except:
 selected_topics = []
 # تحديد المواضيع المتاحة (التي لم يتم اختيارها بعد)
