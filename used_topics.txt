@@ -39,3 +39,4 @@ selected_topics = json.load(f)
 except:
 selected_topics = []
 # تحديد المواضيع المتاحة (التي لم يتم اختيارها بعد)
+available_topics = [t for t in all_topics if t not in selected_topics]
