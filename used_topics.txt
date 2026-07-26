@@ -43,3 +43,4 @@ available_topics = [t for t in all_topics if t not in selected_topics]
 # إذا انتهت كل المواضيع، نصفر التاريخ ونبدأ من جديد
 if not available_topics:
 print("--- تم اختيار جميع المواضيع! إعادة ضبط القائمة... ---")
+available_topics = all_topics
