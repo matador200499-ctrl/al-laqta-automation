@@ -41,3 +41,4 @@ selected_topics = []
 # تحديد المواضيع المتاحة (التي لم يتم اختيارها بعد)
 available_topics = [t for t in all_topics if t not in selected_topics]
 # إذا انتهت كل المواضيع، نصفر التاريخ ونبدأ من جديد
+if not available_topics:

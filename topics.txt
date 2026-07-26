@@ -1,4 +1,3 @@
-if not available_topics:
 print("--- تم اختيار جميع المواضيع! إعادة ضبط القائمة... ---")
 available_topics = all_topics
 selected_topics = []
