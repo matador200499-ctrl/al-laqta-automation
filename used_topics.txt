@@ -47,3 +47,4 @@ available_topics = all_topics
 selected_topics = []
 # اختيار موضوع عشوائي من المتاح
 topic = random.choice(available_topics)
+selected_topics.append(topic)
