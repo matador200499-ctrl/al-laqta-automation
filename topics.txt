@@ -1,4 +1,3 @@
-topic = random.choice(available_topics)
 selected_topics.append(topic)
 # حفظ التاريخ المحدث
 with open(history_file, 'w', encoding='utf-8') as f:
