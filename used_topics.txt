@@ -51,3 +51,4 @@ selected_topics.append(topic)
 # حفظ التاريخ المحدث
 with open(history_file, 'w', encoding='utf-8') as f:
 json.dump(selected_topics, f, ensure_ascii=False, indent=4)
+print(f"الموضوع المختار هو: {topic}")
