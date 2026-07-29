@@ -3,7 +3,7 @@ pick_topic.py
 يختار أول موضوع في topics.txt (قائمة انتظار) عشان تشتغل الأتمتة بدون تدخل بشري،
 وينقله لـ used_topics.txt عشان مايتكررش.
 
-لو القائمة فاضية أو الملف مش موجود: يستدعي Grok API ويولّد دفعة مواضيع جديدة
+لو القائمة فاضية أو الملف مش موجود: يستدعي Groq API ويولّد دفعة مواضيع جديدة
 تلقائيًا، يحفظها في topics.txt، وبعدين يكمل الاختيار عادي بدون تدخل بشري.
 """
 import sys
@@ -15,8 +15,8 @@ import urllib.error
 TOPICS_FILE = "topics.txt"
 USED_FILE = "used_topics.txt"
 
-GROK_API_URL = "https://api.x.ai/v1/chat/completions"
-GROK_MODEL = os.environ.get("GROK_MODEL", "grok-4-latest")
+GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
+GROQ_MODEL = os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile")
 TOPICS_TO_GENERATE = 15
 
 # عدّل السطر ده يوصف مجال القناة بتاعتك عشان المواضيع المولّدة تبقى مناسبة
@@ -34,11 +34,11 @@ def read_used_topics():
         return [line.strip() for line in f if line.strip()]
 
 
-def generate_topics_with_grok():
-    """يطلب من Grok قائمة مواضيع جديدة ويرجعها كـ list."""
-    api_key = os.environ.get("GROK_API_KEY")
+def generate_topics_with_groq():
+    """يطلب من Groq قائمة مواضيع جديدة ويرجعها كـ list."""
+    api_key = os.environ.get("GROQ_API_KEY")
     if not api_key:
-        print("خطأ: متغير GROK_API_KEY غير موجود في البيئة", file=sys.stderr)
+        print("خطأ: متغير GROQ_API_KEY غير موجود في البيئة", file=sys.stderr)
         sys.exit(1)
 
     used = read_used_topics()
@@ -60,14 +60,14 @@ def generate_topics_with_grok():
 
     body = json.dumps(
         {
-            "model": GROK_MODEL,
+            "model": GROQ_MODEL,
             "messages": [{"role": "user", "content": prompt}],
             "temperature": 0.9,
         }
     ).encode("utf-8")
 
     req = urllib.request.Request(
-        GROK_API_URL,
+        GROQ_API_URL,
         data=body,
         headers={
             "Content-Type": "application/json",
@@ -81,16 +81,16 @@ def generate_topics_with_grok():
             data = json.loads(resp.read().decode("utf-8"))
     except urllib.error.HTTPError as e:
         err_body = e.read().decode("utf-8", errors="ignore")
-        print(f"خطأ من Grok API: {e.code} - {err_body}", file=sys.stderr)
+        print(f"خطأ من Groq API: {e.code} - {err_body}", file=sys.stderr)
         sys.exit(1)
     except urllib.error.URLError as e:
-        print(f"خطأ في الاتصال بـ Grok API: {e}", file=sys.stderr)
+        print(f"خطأ في الاتصال بـ Groq API: {e}", file=sys.stderr)
         sys.exit(1)
 
     try:
         content = data["choices"][0]["message"]["content"]
     except (KeyError, IndexError):
-        print(f"رد غير متوقع من Grok API: {data}", file=sys.stderr)
+        print(f"رد غير متوقع من Groq API: {data}", file=sys.stderr)
         sys.exit(1)
 
     new_topics = [line.strip(" -\t") for line in content.splitlines() if line.strip()]
@@ -115,8 +115,8 @@ def ensure_topics_available():
     if lines:
         return lines
 
-    print("قائمة المواضيع فاضية، جاري توليد مواضيع جديدة تلقائيًا عبر Grok...")
-    new_topics = generate_topics_with_grok()
+    print("قائمة المواضيع فاضية، جاري توليد مواضيع جديدة تلقائيًا عبر Groq...")
+    new_topics = generate_topics_with_groq()
 
     with open(TOPICS_FILE, "w", encoding="utf-8") as f:
         f.write("\n".join(new_topics) + "\n")
