@@ -53,3 +53,4 @@ with open(history_file, 'w', encoding='utf-8') as f:
 json.dump(selected_topics, f, ensure_ascii=False, indent=4)
 print(f"الموضوع المختار هو: {topic}")
 print(f"عدد المواضيع المتبقية: {len(available_topics) - 1}")
+if __name__ == "__main__":
