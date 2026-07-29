@@ -55,3 +55,4 @@ print(f"الموضوع المختار هو: {topic}")
 print(f"عدد المواضيع المتبقية: {len(available_topics) - 1}")
 if __name__ == "__main__":
 pick_topic()
+نصيحة سريعة عن الإنتاجية
