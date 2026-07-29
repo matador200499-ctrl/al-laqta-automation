@@ -26,6 +26,8 @@ jobs:
         run: pip install -r requirements.txt
       - name: Pick next topic
         if: ${{ inputs.manual_topic == '' }}
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
         run: python pick_topic.py
       - name: Use manual topic
         if: ${{ inputs.manual_topic != '' }}
