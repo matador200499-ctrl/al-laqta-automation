@@ -1,23 +1,40 @@
+#!/usr/bin/env python3
 """
 pick_topic.py
 يختار أول موضوع في topics.txt (قائمة انتظار) عشان تشتغل الأتمتة بدون تدخل بشري،
 وينقله لـ used_topics.txt عشان مايتكررش.
 
-لو القائمة فاضية أو الملف مش موجود: يستدعي Groq API ويولّد دفعة مواضيع جديدة
-تلقائيًا، يحفظها في topics.txt، وبعدين يكمل الاختيار عادي بدون تدخل بشري.
+لو القائمة فاضية أو الملف مش موجود: يحاول يستدعي Groq API ويولّد دفعة مواضيع جديدة.
+لو فشل الطلب أو رجع نتيجة غير صالحة: يستخدم قائمة fallback محلية بدلاً من الخروج.
 """
 import sys
 import os
 import json
 import urllib.request
 import urllib.error
+import random
+from typing import List, Optional
 
 TOPICS_FILE = "topics.txt"
 USED_FILE = "used_topics.txt"
 
 GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
 GROQ_MODEL = os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile")
-TOPICS_TO_GENERATE = 15
+TOPICS_TO_GENERATE = int(os.environ.get("TOPICS_TO_GENERATE", "15"))
+
+# قائمة بديلة محلية تستخدم لو فشل Groq
+FALLBACK_TOPICS = [
+    "نصيحة سريعة عن الإنتاجية",
+    "حيلة تقنية بسيطة تحسّن حياتك",
+    "معلومة علمية تدهشك",
+    "تاريخ قصيرة لحدث مشهور",
+    "خطأ شائع في التكنولوجيا وكيف تتجنبه",
+    "تجربة شخصية مختصرة ومع درس مفيد",
+    "أبسط طريقة لتعلم مهارة جديدة",
+    "قصة نجاح ملهمة في دقيقة",
+    "معلومة عن ثقافة شعبية",
+    "خمس نقاط سريعة لتحسين يومك"
+]
 
 # عدّل السطر ده يوصف مجال القناة بتاعتك عشان المواضيع المولّدة تبقى مناسبة
 CHANNEL_DESCRIPTION = os.environ.get(
@@ -26,29 +43,25 @@ CHANNEL_DESCRIPTION = os.environ.get(
 )
 
 
-def read_used_topics():
-    """يقرأ المواضيع المستخدمة قبل كده عشان مايكررهاش."""
+def read_used_topics() -> List[str]:
     if not os.path.exists(USED_FILE):
         return []
     with open(USED_FILE, "r", encoding="utf-8") as f:
         return [line.strip() for line in f if line.strip()]
 
 
-def generate_topics_with_groq():
-    """يطلب من Groq قائمة مواضيع جديدة ويرجعها كـ list."""
+def generate_topics_with_groq() -> List[str]:
+    """يحاول يستدعي Groq ويرجع قائمة مواضيع جديدة أو [] لو فشل."""
     api_key = os.environ.get("GROQ_API_KEY")
     if not api_key:
-        print("خطأ: متغير GROQ_API_KEY غير موجود في البيئة", file=sys.stderr)
-        sys.exit(1)
+        print("تحذير: متغير GROQ_API_KEY غير موجود في البيئة — سيتم استخدام قائمة محلية بدلاً من Groq", file=sys.stderr)
+        return []
 
     used = read_used_topics()
-    # ناخد آخر 30 موضوع مستخدم بس عشان الطلب ميبقاش طويل أوي
     used_recent = used[-30:]
     avoid_text = ""
     if used_recent:
-        avoid_text = (
-            "\nمواضيع اتغطت قبل كده وممنوع تكررها:\n- " + "\n- ".join(used_recent)
-        )
+        avoid_text = "\nمواضيع اتغطت قبل كده وممنوع تكررها:\n- " + "\n- ".join(used_recent)
 
     prompt = (
         f"اقترح {TOPICS_TO_GENERATE} موضوع جديد ومختلف لفيديو شورتس قصير.\n"
@@ -78,35 +91,44 @@ def generate_topics_with_groq():
 
     try:
         with urllib.request.urlopen(req, timeout=60) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
+            raw = resp.read().decode("utf-8", errors="ignore")
+            try:
+                data = json.loads(raw)
+            except Exception:
+                print("تحذير: استجابة Groq غير قابلة للتحويل إلى JSON:", raw, file=sys.stderr)
+                return []
     except urllib.error.HTTPError as e:
         err_body = e.read().decode("utf-8", errors="ignore")
         print(f"خطأ من Groq API: {e.code} - {err_body}", file=sys.stderr)
-        sys.exit(1)
+        # لو 403 أو غيرها، لا ننهى التنفيذ؛ نرجع قائمة فارغة عشان نستخدم الفالباك
+        return []
     except urllib.error.URLError as e:
         print(f"خطأ في الاتصال بـ Groq API: {e}", file=sys.stderr)
-        sys.exit(1)
+        return []
+    except Exception as e:
+        print(f"خطأ غير متوقع عند الاتصال بـ Groq: {e}", file=sys.stderr)
+        return []
 
+    # محاولة استخراج النص من بنية OpenAI-like
     try:
         content = data["choices"][0]["message"]["content"]
-    except (KeyError, IndexError):
+    except (KeyError, IndexError, TypeError):
         print(f"رد غير متوقع من Groq API: {data}", file=sys.stderr)
-        sys.exit(1)
+        return []
 
     new_topics = [line.strip(" -\t") for line in content.splitlines() if line.strip()]
-    # فلترة أي تكرار مع المواضيع المستخدمة قبل كده
     used_set = set(used)
     new_topics = [t for t in new_topics if t not in used_set]
 
     if not new_topics:
-        print("خطأ: Grok مرجعش أي مواضيع صالحة", file=sys.stderr)
-        sys.exit(1)
+        print("تحذير: Groq لم يعد مواضيع صالحة بعد فلترة المستخدمة", file=sys.stderr)
+        return []
 
     return new_topics
 
 
-def ensure_topics_available():
-    """يتأكد إن topics.txt فيه مواضيع، ولو لأ يولّد جديد تلقائي."""
+def ensure_topics_available() -> List[str]:
+    """يتأكد إن topics.txt فيه مواضيع، ولو لأ يولّد جديد تلقائي (أو يستخدم fallback)."""
     lines = []
     if os.path.exists(TOPICS_FILE):
         with open(TOPICS_FILE, "r", encoding="utf-8") as f:
@@ -115,13 +137,17 @@ def ensure_topics_available():
     if lines:
         return lines
 
-    print("قائمة المواضيع فاضية، جاري توليد مواضيع جديدة تلقائيًا عبر Groq...")
+    print("قائمة المواضيع فاضية، جاري محاولة توليد مواضيع جديدة عبر Groq...")
     new_topics = generate_topics_with_groq()
+
+    if not new_topics:
+        print("استخدام قائمة مواضيع محلية (fallback) لأن Groq لم يعد مواضيع صالحة أو فشل.", file=sys.stderr)
+        new_topics = FALLBACK_TOPICS.copy()
 
     with open(TOPICS_FILE, "w", encoding="utf-8") as f:
         f.write("\n".join(new_topics) + "\n")
 
-    print(f"تم توليد {len(new_topics)} موضوع جديد وحفظهم في {TOPICS_FILE}")
+    print(f"تم تحديد {len(new_topics)} موضوع وحفظهم في {TOPICS_FILE}")
     return new_topics
 
 
@@ -137,7 +163,7 @@ def main():
     with open(USED_FILE, "a", encoding="utf-8") as f:
         f.write(topic + "\n")
 
-    # نكتب الموضوع في متغير بيئة GitHub Actions عشان الخطوات الجاية تستخدمه
+    # نكتب الموضوع في متغير بيئة GitHub Actions
     github_env = os.environ.get("GITHUB_ENV")
     if github_env:
         with open(github_env, "a", encoding="utf-8") as f:
