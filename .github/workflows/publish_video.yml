@@ -18,10 +18,10 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - name: Install system dependencies (ffmpeg + Arabic fonts)
+      - name: Install system dependencies (ffmpeg + Arabic fonts + raqm)
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg fonts-noto fonts-noto-cjk fonts-hosny-amiri
+          sudo apt-get install -y ffmpeg fonts-noto fonts-noto-cjk fonts-hosny-amiri libraqm-dev
       - name: Install Python dependencies
         run: pip install -r requirements.txt
       - name: Pick next topic
