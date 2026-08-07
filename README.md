@@ -4,7 +4,7 @@
 
 | المرحلة | الأداة | التكلفة |
 |---|---|---|
-| كتابة السكريبت (مقسّم لمشاهد) | Claude API | قروش قليلة/فيديو (عندك المفتاح) |
+| كتابة السكريبت (مقسّم لمشاهد) | Groq API | مجاني/رخيص جداً (عندك المفتاح) |
 | التعليق الصوتي | edge-tts (أصوات Microsoft Edge العصبية) | مجاني 100% |
 | مقاطع الفيديو | Pexels (فيديوهات ستوك حقيقية بدون حقوق) | مجاني 100% |
 | تركيب الفيديو + الكتابة على الشاشة | FFmpeg | مجاني 100% |
@@ -63,7 +63,7 @@ Settings → Secrets and variables → Actions → New repository secret:
 
 | اسم الـ Secret | القيمة |
 |---|---|
-| `ANTHROPIC_API_KEY` | مفتاح Claude بتاعك |
+| `GROQ_API_KEY` | مفتاح Groq بتاعك |
 | `PEXELS_API_KEY` | من خطوة (ج) |
 | `YT_CLIENT_ID` | من client_secrets.json |
 | `YT_CLIENT_SECRET` | من client_secrets.json |
@@ -79,7 +79,7 @@ Settings → Secrets and variables → Actions → New repository secret:
 بمجرد ما الإعداد يخلص، الـ workflow هيشتغل لوحده **4 مرات يوميًا** (الساعات مضبوطة في `publish_video.yml`، عدّلها لو حابب توقيت مختلف). كل مرة:
 
 1. ياخد أول موضوع من `topics.txt`
-2. Claude يكتب سكريبت مقسّم لمشاهد
+2. Groq يكتب سكريبت مقسّم لمشاهد (15 دقيقة)
 3. edge-tts يولّد الصوت
 4. Pexels يديله مقاطع فيديو لكل مشهد
 5. FFmpeg يركب كل حاجة مع الكتابة على الشاشة
@@ -99,4 +99,4 @@ Settings → Secrets and variables → Actions → New repository secret:
 
 - **تغيير صوت الراوي**: غيّر `TTS_VOICE` في `scripts/generate_voice.py` (أصوات عربية تانية متاحة: `ar-EG-SalmaNeural`, `ar-SA-HamedNeural`, `ar-SA-ZariyahNeural`).
 - **تغيير عدد مرات النشر**: عدّل سطر `cron` في `publish_video.yml`.
-- **تغيير مدة الفيديو**: عدّل عدد الكلمات المطلوب في `scripts/generate_script.py`.
+- **تغيير مدة الفيديو**: عدّل عدد الكلمات المطلوب في `scripts/generate_script.py` (تم ضبطه حالياً لـ 15 دقيقة).
