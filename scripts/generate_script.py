@@ -13,17 +13,16 @@ from openai import OpenAI
 
 CHANNEL_STYLE = """
 أنت كاتب سكريبتات لقناة يوتيوب اسمها "اللقطة - Al Laqta".
-أسلوب القناة: محتوى مشوق ومحترم بعيد عن الإسفاف والعناوين المضللة (Clickbait).
-النبرة: سينمائية، تحليلية، تكشف تفاصيل يغفل عنها الجمهور.
+الأسلوب: مشوق ومحترم، سينمائي وتحليلي، بلا إسفاف أو Clickbait.
 """.strip()
 
 
 def build_prompt(topic: str) -> str:
     return f"""{CHANNEL_STYLE}
 الموضوع: "{topic}"
-اكتب سكريبت فيديو طويل واحترافي مدته 15 دقيقة كاملة (حوالي 2500-3000 كلمة عربية موزعة
-على 30-35 مشهد). كل مشهد لازم يكون:
-- narration: فقرة سرد طويلة بالعربية الفصحى المبسطة (80-100 كلمة) تشرح تفاصيل الموضوع بعمق.
+اكتب سكريبتًا احترافيًا مدته 15 دقيقة تقريبًا (حوالي 2000-2300 كلمة عربية موزعة
+على 26-30 مشهد). كل مشهد يجب أن يحتوي:
+- narration: فقرة بالعربية الفصحى المبسطة (70-85 كلمة) تشرح الموضوع بوضوح.
 - keywords: كلمتين أو 3 بالإنجليزية تصف مشهد فيديو حقيقي مناسب (وصف بصري عام زي "ancient library atmosphere")
 - onscreen_text: جملة قصيرة (3-6 كلمات) بالعربي تظهر على الشاشة.
 مهم جدًا: رجّعلي الناتج بصيغة JSON فقط وحصرًا، أول حرف في ردك لازم يكون {{ وآخر حرف لازم يكون }}.
@@ -53,6 +52,8 @@ def model_candidates(client):
     try:
         active_ids = {model.id for model in client.models.list().data}
     except Exception as error:
+        # The completion endpoint is still authoritative if model listing is
+        # temporarily unavailable, so keep the documented production order.
         print(
             f"تحذير: تعذر قراءة قائمة نماذج Groq ({error.__class__.__name__}). "
             "سيتم استخدام النموذج الافتراضي مباشرة.",
@@ -69,11 +70,12 @@ def model_candidates(client):
     return available
 
 
-def try_generate(client, topic, model):
+def try_generate(client, topic, model, max_tokens):
     response = client.chat.completions.create(
         model=model,
         messages=[{"role": "user", "content": build_prompt(topic)}],
-        max_tokens=8000,
+        # Keep prompt + completion safely below Groq's 8,000 TPM free limit.
+        max_tokens=max_tokens,
     )
     raw_text = response.choices[0].message.content.strip()
     cleaned = re.sub(r"^```json\s*|\s*```$", "", raw_text)
@@ -105,11 +107,15 @@ def main():
     last_error = None
     last_raw = None
     max_attempts = 4
+    max_output_tokens = int(os.environ.get("GROQ_MAX_OUTPUT_TOKENS", "5600"))
     for attempt in range(1, max_attempts + 1):
         model = models[(attempt - 1) % len(models)]
         try:
-            print(f"محاولة رقم {attempt} من {max_attempts} باستخدام {model}...")
-            data, last_raw = try_generate(client, topic, model)
+            print(
+                f"محاولة رقم {attempt} من {max_attempts} باستخدام {model} "
+                f"(حد الإخراج {max_output_tokens} توكن)..."
+            )
+            data, last_raw = try_generate(client, topic, model, max_output_tokens)
             print(f"نجحت المحاولة باستخدام {model}.")
             break
         except (json.JSONDecodeError, ValueError) as error:
@@ -119,10 +125,19 @@ def main():
                 time.sleep(3)
         except Exception as error:
             last_error = error
+            error_text = str(error)
             print(
                 f"فشل طلب Groq في المحاولة {attempt} ({error.__class__.__name__}): {error}",
                 file=sys.stderr,
             )
+            # If Groq reports a TPM/request-size limit, reduce the requested
+            # completion instead of repeating the same oversized request.
+            if (getattr(error, "status_code", None) == 413 or "tokens per minute" in error_text) and max_output_tokens > 3200:
+                max_output_tokens = max(3200, max_output_tokens - 1000)
+                print(
+                    f"سيتم تقليل حد الإخراج إلى {max_output_tokens} توكن في المحاولة التالية.",
+                    file=sys.stderr,
+                )
             if attempt < max_attempts:
                 time.sleep(3)
 
