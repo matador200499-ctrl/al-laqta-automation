@@ -19,7 +19,7 @@ TOPICS_FILE = "topics.txt"
 USED_FILE = "used_topics.txt"
 
 GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
-GROQ_MODEL = os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile")
+GROQ_MODEL = os.environ.get("GROQ_MODEL", "openai/gpt-oss-120b")
 TOPICS_TO_GENERATE = int(os.environ.get("TOPICS_TO_GENERATE", "15"))
 
 # قائمة بديلة محلية تستخدم لو فشل Groq
