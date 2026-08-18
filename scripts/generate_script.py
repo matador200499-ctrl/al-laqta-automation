@@ -1,13 +1,14 @@
-﻿"""
+"""
 generate_script.py
 يستخدم Groq API لتوليد عنوان + وصف + تاجز + سكريبت مقسّم لمشاهد.
 النتيجة بتتحفظ في script.json و content.json.
 """
-import os
-import sys
 import json
+import os
 import re
+import sys
 import time
+
 from openai import OpenAI
 
 CHANNEL_STYLE = """
@@ -15,6 +16,7 @@ CHANNEL_STYLE = """
 أسلوب القناة: محتوى مشوق ومحترم بعيد عن الإسفاف والعناوين المضللة (Clickbait).
 النبرة: سينمائية، تحليلية، تكشف تفاصيل يغفل عنها الجمهور.
 """.strip()
+
 
 def build_prompt(topic: str) -> str:
     return f"""{CHANNEL_STYLE}
@@ -36,9 +38,40 @@ def build_prompt(topic: str) -> str:
 }}
 """
 
-def try_generate(client, topic):
+
+def model_candidates(client):
+    """Return active Groq models, preferring the current production replacement."""
+    preferred = os.environ.get("GROQ_MODEL", "openai/gpt-oss-120b").strip()
+    fallback_order = [
+        preferred,
+        "openai/gpt-oss-120b",
+        "qwen/qwen3.6-27b",
+        "openai/gpt-oss-20b",
+    ]
+    fallback_order = list(dict.fromkeys(model for model in fallback_order if model))
+
+    try:
+        active_ids = {model.id for model in client.models.list().data}
+    except Exception as error:
+        print(
+            f"تحذير: تعذر قراءة قائمة نماذج Groq ({error.__class__.__name__}). "
+            "سيتم استخدام النموذج الافتراضي مباشرة.",
+            file=sys.stderr,
+        )
+        return fallback_order
+
+    available = [model for model in fallback_order if model in active_ids]
+    if not available:
+        raise RuntimeError(
+            "لا يوجد نموذج متاح من قائمة Groq الحالية. "
+            "تحقق من GROQ_MODEL أو من صلاحيات مفتاح GROQ_API_KEY."
+        )
+    return available
+
+
+def try_generate(client, topic, model):
     response = client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
+        model=model,
         messages=[{"role": "user", "content": build_prompt(topic)}],
         max_tokens=8000,
     )
@@ -53,6 +86,7 @@ def try_generate(client, topic):
         raise ValueError("لا توجد مشاهد في الناتج")
     return data, raw_text
 
+
 def main():
     topic = os.environ.get("VIDEO_TOPIC")
     if not topic:
@@ -62,38 +96,56 @@ def main():
     if not api_key:
         print("خطأ: GROQ_API_KEY غير موجود", file=sys.stderr)
         sys.exit(1)
+
     client = OpenAI(api_key=api_key, base_url="https://api.groq.com/openai/v1")
+    models = model_candidates(client)
+    print(f"نماذج Groq المرشحة: {', '.join(models)}")
 
     data = None
     last_error = None
     last_raw = None
     max_attempts = 4
     for attempt in range(1, max_attempts + 1):
+        model = models[(attempt - 1) % len(models)]
         try:
-            print(f"محاولة رقم {attempt} من {max_attempts}...")
-            data, last_raw = try_generate(client, topic)
-            print("نجحت المحاولة.")
+            print(f"محاولة رقم {attempt} من {max_attempts} باستخدام {model}...")
+            data, last_raw = try_generate(client, topic, model)
+            print(f"نجحت المحاولة باستخدام {model}.")
             break
-        except (json.JSONDecodeError, ValueError) as e:
-            last_error = e
-            print(f"فشلت المحاولة {attempt}: {e}", file=sys.stderr)
+        except (json.JSONDecodeError, ValueError) as error:
+            last_error = error
+            print(f"فشلت المحاولة {attempt}: {error}", file=sys.stderr)
+            if attempt < max_attempts:
+                time.sleep(3)
+        except Exception as error:
+            last_error = error
+            print(
+                f"فشل طلب Groq في المحاولة {attempt} ({error.__class__.__name__}): {error}",
+                file=sys.stderr,
+            )
             if attempt < max_attempts:
                 time.sleep(3)
 
     if data is None:
-        print(f"خطأ: فشلت كل المحاولات ({max_attempts}) في توليد JSON صحيح: {last_error}", file=sys.stderr)
+        print(
+            f"خطأ: فشلت كل المحاولات ({max_attempts}) في توليد JSON صحيح: {last_error}",
+            file=sys.stderr,
+        )
         if last_raw:
             print(last_raw, file=sys.stderr)
         sys.exit(1)
 
-    with open("script.json", "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
-    with open("content.json", "w", encoding="utf-8") as f:
+    with open("script.json", "w", encoding="utf-8") as file:
+        json.dump(data, file, ensure_ascii=False, indent=2)
+    with open("content.json", "w", encoding="utf-8") as file:
         json.dump(
             {"title": data["title"], "description": data["description"], "tags": data["tags"]},
-            f, ensure_ascii=False, indent=2,
+            file,
+            ensure_ascii=False,
+            indent=2,
         )
     print(f"تم توليد سكريبت من {len(data['scenes'])} مشهد بنجاح.")
+
 
 if __name__ == "__main__":
     main()
