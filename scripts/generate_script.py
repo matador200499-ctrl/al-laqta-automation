@@ -1,77 +1,30 @@
 import os
-import json
 from groq import Groq
 
-def generate_script(topic):
+def main():
     client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
+    topic = "برج الميزان"
+    try:
+        if os.path.exists("manual_topic.txt"):
+            with open("manual_topic.txt","r",encoding="utf-8") as f:
+                t=f.read().strip()
+                if t: topic=t
+    except: pass
 
-    prompt = f"""
-أنت كاتب سكريبت لقناة يوتيوب اسمها "اللقطة" تتكلم عن الأبراج بطريقة مشوقة وغامضة.
-
-الموضوع المطلوب: {topic}
-
-المطلوب:
-1. اكتب سكريبت فيديو قصير 45-60 ثانية باللهجة المصرية العامية
-2. ابدأ بهوك قوي يشد الانتباه
-3. اذكر 3 صفات أو توقعات عن البرج
-4. اختم بسؤال يخلي الناس تعلق
-5. لا تضع أي عناوين أو أرقام، فقط نص السكريبت جاهز للقراءة مباشرة
-
-السكريبت:
-"""
+    print(f"Generating for topic: {topic} with model llama3-8b-8192")
 
     completion = client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
-        messages=[
-            {"role": "user", "content": prompt}
-        ],
+        model="llama3-8b-8192",
+        messages=[{"role":"user","content":f"اكتب سكريبت فيديو قصير 50 ثانية بالعامية المصرية عن {topic}. ابدأ بهوك قوي واذكر 3 صفات وخاتمة بسؤال يخلي الناس تعلق"}],
         temperature=0.8,
-        max_tokens=800,
-        top_p=1,
+        max_tokens=800
     )
-
-    return completion.choices[0].message.content.strip()
-
-def get_topic():
-    # حاول تقرأ من ملفات مختلفة
-    if os.path.exists("manual_topic.txt"):
-        with open("manual_topic.txt", "r", encoding="utf-8") as f:
-            return f.read().strip()
-
-    if os.path.exists("current_topic.txt"):
-        with open("current_topic.txt", "r", encoding="utf-8") as f:
-            return f.read().strip()
-
-    if os.path.exists("topics.txt"):
-        try:
-            with open("topics.txt", "r", encoding="utf-8") as f:
-                topics = [l.strip() for l in f if l.strip()]
-            if topics:
-                return topics[0]
-        except:
-            pass
-
-    return "برج الميزان"
-
-def main():
+    script = completion.choices[0].message.content.strip()
     os.makedirs("output", exist_ok=True)
-
-    topic = get_topic()
-    print(f"Generating for topic: {topic} with model llama-3.3-70b-versatile")
-
-    script = generate_script(topic)
-
-    print(f"Generated script: {script[:100]}...")
-
-    # اكتبه في كل الأماكن المتوقعة عشان اللي بعده يلاقيه
-    with open("output/script.txt", "w", encoding="utf-8") as f:
-        f.write(script)
-
-    with open("script.txt", "w", encoding="utf-8") as f:
-        f.write(script)
-
-    with open("output/story.txt", "w", encoding="utf-8") as f:
-        f.write(script)
+    open("output/script.txt","w",encoding="utf-8").write(script)
+    open("script.txt","w",encoding="utf-8").write(script)
+    open("output/story.txt","w",encoding="utf-8").write(script)
+    print(f"Generated: {script[:150]}")
 
 if __name__ == "__main__":
     main()
