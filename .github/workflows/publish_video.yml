@@ -1,44 +1,25 @@
-name: Publish Video (Automated)
-on:
-  schedule:
-    - cron: '0 */3 * * *'
-  workflow_dispatch:
-jobs:
-  publish:
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-      - name: Install deps
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends ffmpeg fonts-noto-core fonts-noto-ui-core libraqm0
-          pip install -U pip
-          pip install groq edge-tts moviepy==1.0.3 requests Pillow arabic-reshaper python-bidi google-api-python-client google-auth-httplib2 google-auth-oauthlib
-      - name: Generate script
-        env:
-          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
-        run: python scripts/generate_script.py
-      - name: Generate voice
-        run: python scripts/generate_voice.py
-      - name: Fetch clips
-        env:
-          PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
-        run: python scripts/fetch_clips.py
-      - name: Assemble video
-        run: python scripts/assemble_video.py
-      - name: Upload to YouTube
-        env:
-          YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
-          YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
-          YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
-        run: python scripts/upload_youtube.py
-      - name: Commit queue
-        run: |
-          git config user.name "github-actions"
-          git config user.email "actions@github.com"
-          git add used_topics.txt || true
-          git diff --staged --quiet || git commit -m "queue update [skip ci]" && git push || true
+import os
+from groq import Groq
+
+def main():
+    client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
+    topic = "الطبيعة النارية للميزان"
+    if os.path.exists("manual_topic.txt"):
+        with open("manual_topic.txt","r",encoding="utf-8") as f:
+            topic=f.read().strip() or topic
+    print(f"Generating for topic: {topic} with model llama-3.3-70b-versatile")
+    completion = client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=[{"role":"user","content":f"اكتب سكريبت فيديو قصير 50 ثانية بالعامية المصرية عن {topic} لهوك قوي و3 نقاط وخاتمة بسؤال"}],
+        temperature=0.8,
+        max_tokens=800
+    )
+    script = completion.choices[0].message.content.strip()
+    os.makedirs("output", exist_ok=True)
+    open("output/script.txt","w",encoding="utf-8").write(script)
+    open("script.txt","w",encoding="utf-8").write(script)
+    open("output/story.txt","w",encoding="utf-8").write(script)
+    print("Script saved")
+
+if __name__ == "__main__":
+    main()
