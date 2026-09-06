@@ -5,6 +5,9 @@ on:
     - cron: '0 */3 * * *'
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   publish:
     runs-on: ubuntu-latest
@@ -21,6 +24,11 @@ jobs:
           sudo apt-get install -y --no-install-recommends ffmpeg fonts-noto-core fonts-noto-ui-core libraqm0
           pip install -U pip
           pip install groq edge-tts moviepy==1.0.3 requests Pillow arabic-reshaper python-bidi google-api-python-client google-auth-httplib2 google-auth-oauthlib
+
+      - name: Pick next topic
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+        run: python pick_topic.py
 
       - name: Generate script
         env:
@@ -49,3 +57,14 @@ jobs:
           VIDEO_PATH: final_video.mp4
           PRIVACY_STATUS: public
         run: python scripts/upload_youtube.py
+
+      - name: Save topic rotation
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add topics.txt used_topics.txt
+          if ! git diff --cached --quiet; then
+            git commit -m "Rotate published video topic"
+            git pull --rebase origin main
+            git push origin main
+          fi
