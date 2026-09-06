@@ -47,5 +47,5 @@ jobs:
           YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
           YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
           VIDEO_PATH: final_video.mp4
-          PRIVACY_STATUS: private
+          PRIVACY_STATUS: public
         run: python scripts/upload_youtube.py
