@@ -17,6 +17,11 @@ def get_topic() -> str:
                 return topic
         except OSError:
             pass
+
+    queued_topic = os.environ.get("VIDEO_TOPIC", "").strip()
+    if queued_topic:
+        return queued_topic
+
     return DEFAULT_TOPIC
 
 
