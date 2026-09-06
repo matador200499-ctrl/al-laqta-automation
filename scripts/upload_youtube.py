@@ -29,7 +29,7 @@ def get_authenticated_service():
 
 def main():
     video_path = os.environ.get("VIDEO_PATH")
-    privacy_status = os.environ.get("PRIVACY_STATUS", "private")
+    privacy_status = os.environ.get("PRIVACY_STATUS", "public")
 
     if not video_path or not os.path.exists(video_path):
         print(f"خطأ: ملف الفيديو غير موجود: {video_path}", file=sys.stderr)
