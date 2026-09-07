@@ -12,6 +12,7 @@ assemble_video.py
 
 import json
 import os
+import re
 import subprocess
 
 import arabic_reshaper
@@ -20,6 +21,11 @@ from PIL import Image, ImageDraw, ImageFont
 
 WIDTH, HEIGHT = 1920, 1080
 FONT_PATH = os.environ.get("ARABIC_FONT_PATH", "/usr/share/fonts/truetype/noto/NotoNaskhArabic-Bold.ttf")
+FONT_CANDIDATES = (
+    FONT_PATH,
+    "/usr/share/fonts/truetype/noto/NotoSansArabic-Bold.ttf",
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+)
 
 
 def run(cmd: list[str]):
@@ -27,27 +33,89 @@ def run(cmd: list[str]):
     subprocess.run(cmd, check=True)
 
 
+def load_font(size: int):
+    for path in FONT_CANDIDATES:
+        if path and os.path.exists(path):
+            return ImageFont.truetype(path, size)
+    raise FileNotFoundError("لم يتم العثور على خط عربي مناسب")
+
+
+def rtl_text(text: str):
+    """استخدم محرك RAQM الحديث، مع حل بديل للإصدارات التي لا تدعمه."""
+    cleaned = re.sub(r"\s+", " ", str(text)).strip()
+    try:
+        if ImageFont.core.HAVE_RAQM:
+            return cleaned, {"direction": "rtl", "language": "ar"}
+    except (AttributeError, TypeError):
+        pass
+    return get_display(arabic_reshaper.reshape(cleaned)), {}
+
+
+def wrap_arabic(draw, text: str, font, max_width: int):
+    """يقسّم النص قبل تشكيله، حتى تظل الكلمات واتجاه السطور صحيحين."""
+    words = text.split()
+    lines = []
+    current = ""
+    for word in words:
+        candidate = f"{current} {word}".strip()
+        shown, rtl_args = rtl_text(candidate)
+        box = draw.textbbox((0, 0), shown, font=font, stroke_width=3, **rtl_args)
+        if current and box[2] - box[0] > max_width:
+            lines.append(current)
+            current = word
+        else:
+            current = candidate
+    if current:
+        lines.append(current)
+    return lines
+
+
 def make_overlay_png(text: str, out_path: str):
-    """يرسم شريط نص أسفل الشاشة بالعربي (تشكيل صحيح للحروف + اتجاه من اليمين لليسار)."""
-    reshaped = arabic_reshaper.reshape(text)
-    bidi_text = get_display(reshaped)
+    """يرسم نصًا عربيًا واضحًا، مترابطًا، وفي الاتجاه الصحيح."""
+    text = re.sub(r"\s+", " ", str(text)).strip()
 
     img = Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
 
-    font_size = 64
-    font = ImageFont.truetype(FONT_PATH, font_size)
+    max_width = WIDTH - 240
+    font_size = 76
+    while True:
+        font = load_font(font_size)
+        lines = wrap_arabic(draw, text, font, max_width)
+        if len(lines) <= 2 or font_size <= 54:
+            break
+        font_size -= 4
 
-    bbox = draw.textbbox((0, 0), bidi_text, font=font)
-    text_w, text_h = bbox[2] - bbox[0], bbox[3] - bbox[1]
+    line_gap = 22
+    rendered = []
+    for line in lines:
+        shown, rtl_args = rtl_text(line)
+        bbox = draw.textbbox((0, 0), shown, font=font, stroke_width=3, **rtl_args)
+        rendered.append((shown, rtl_args, bbox, bbox[3] - bbox[1]))
 
-    bar_h = text_h + 80
-    bar_y = HEIGHT - bar_h - 60
-    draw.rectangle([(0, bar_y), (WIDTH, bar_y + bar_h)], fill=(0, 0, 0, 160))
+    text_block_h = sum(item[3] for item in rendered) + line_gap * max(0, len(rendered) - 1)
+    pad_y = 42
+    bar_h = text_block_h + pad_y * 2
+    bar_y = HEIGHT - bar_h - 70
+    draw.rounded_rectangle(
+        [(70, bar_y), (WIDTH - 70, bar_y + bar_h)],
+        radius=28,
+        fill=(0, 0, 0, 205),
+        outline=(255, 255, 255, 55),
+        width=2,
+    )
 
-    x = (WIDTH - text_w) / 2
-    y = bar_y + (bar_h - text_h) / 2 - bbox[1]
-    draw.text((x, y), bidi_text, font=font, fill=(255, 255, 255, 255))
+    y = bar_y + pad_y
+    for shown, rtl_args, bbox, line_h in rendered:
+        text_w = bbox[2] - bbox[0]
+        x = (WIDTH - text_w) / 2 - bbox[0]
+        draw.text(
+            (x, y - bbox[1]), shown, font=font,
+            fill=(255, 255, 255, 255),
+            stroke_width=3, stroke_fill=(0, 0, 0, 255),
+            **rtl_args,
+        )
+        y += line_h + line_gap
 
     img.save(out_path)
 
