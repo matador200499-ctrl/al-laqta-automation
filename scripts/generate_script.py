@@ -52,15 +52,8 @@ def parse_json_response(raw: str) -> dict:
     return data
 
 
-def main():
-    api_key = os.environ.get("GROQ_API_KEY")
-    if not api_key:
-        raise RuntimeError("GROQ_API_KEY is not configured")
-
-    topic = get_topic()
-    print(f"Generating for topic: {topic} with model {MODEL}")
-
-    prompt = f"""
+def build_prompt(topic: str) -> str:
+    return f"""
 اكتب سيناريو فيديو عربي مدته نحو 60 ثانية بالعامية المصرية عن: {topic}.
 ابدأ بهوك قوي، اذكر 3 نقاط أو صفات مفيدة، واختم بسؤال يشجع المشاهد على التعليق.
 
@@ -83,16 +76,66 @@ def main():
 واجعلها مختصرة جدًا حتى تظهر بخط كبير وواضح على شاشة الهاتف.
 """.strip()
 
-    client = Groq(api_key=api_key)
-    completion = client.chat.completions.create(
-        model=MODEL,
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0.8,
-        max_tokens=1800,
-        response_format={"type": "json_object"},
-    )
 
-    data = parse_json_response(completion.choices[0].message.content)
+def request_generation(client: Groq, prompt: str):
+    try:
+        # Prefer structured JSON when the model/provider accepts it.
+        return client.chat.completions.create(
+            model=MODEL,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.8,
+            max_tokens=1800,
+            response_format={"type": "json_object"},
+        )
+    except Exception as first_error:
+        # Some Groq/model combinations reject response_format with
+        # json_validate_failed. Retry without provider-side JSON validation;
+        # parse_json_response() still validates the returned JSON locally.
+        print(f"Groq structured JSON request failed: {first_error}")
+        print("Retrying once without response_format...")
+        return client.chat.completions.create(
+            model=MODEL,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.7,
+            max_tokens=1800,
+        )
+
+
+def main():
+    api_key = os.environ.get("GROQ_API_KEY")
+    if not api_key:
+        raise RuntimeError("GROQ_API_KEY is not configured")
+
+    topic = get_topic()
+    print(f"Generating for topic: {topic} with model {MODEL}")
+
+    prompt = build_prompt(topic)
+    client = Groq(api_key=api_key)
+    completion = request_generation(client, prompt)
+
+    raw = completion.choices[0].message.content or ""
+    try:
+        data = parse_json_response(raw)
+    except (ValueError, json.JSONDecodeError) as parse_error:
+        # One final repair request if the fallback model response is not valid JSON.
+        print(f"Initial response was not valid JSON: {parse_error}")
+        repair_prompt = f"""
+حوّل النص التالي إلى JSON صحيح فقط، بدون Markdown أو أي نص خارج JSON.
+يجب أن يحتوي JSON على title و description و tags و scenes.
+كل scene يجب أن يحتوي على narration و onscreen_text و keywords.
+لا تغيّر مضمون السيناريو إلا بالقدر اللازم لإصلاح JSON.
+
+النص:
+{raw}
+""".strip()
+        repaired = client.chat.completions.create(
+            model=MODEL,
+            messages=[{"role": "user", "content": repair_prompt}],
+            temperature=0.2,
+            max_tokens=1800,
+        )
+        data = parse_json_response(repaired.choices[0].message.content or "")
+
     script = {"topic": topic, "scenes": data["scenes"]}
     content = {
         "title": data["title"],
