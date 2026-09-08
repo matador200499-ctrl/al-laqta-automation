@@ -6,7 +6,7 @@ from groq import Groq
 
 
 MODEL = os.environ.get("GROQ_MODEL", "openai/gpt-oss-20b")
-DEFAULT_TOPIC = "برج الميزان"
+DEFAULT_TOPIC = "غرائب وألغاز علمية مذهلة"
 
 
 def get_topic() -> str:
