@@ -57,16 +57,28 @@ def build_prompt(topic: str) -> str:
 اكتب سيناريو فيديو عربي مدته نحو 60 ثانية بالعامية المصرية عن: {topic}.
 ابدأ بهوك قوي، اذكر 3 نقاط أو صفات مفيدة، واختم بسؤال يشجع المشاهد على التعليق.
 
-أعد JSON صحيح فقط بدون Markdown بهذا الشكل:
+أعد JSON صحيح فقط بدون Markdown أو أي نص قبله أو بعده.
+استخدم المفاتيح التالية فقط:
+- title: عنوان عربي جذاب لا يزيد عن 90 حرفًا
+- description: وصف عربي قصير للفيديو
+- tags: قائمة من 3 إلى 5 وسوم عربية
+- scenes: قائمة من 6 أو 7 مشاهد
+
+كل مشهد يجب أن يحتوي على:
+- narration: نص التعليق الصوتي بالعامية المصرية
+- onscreen_text: عبارة عربية واضحة من 4 إلى 8 كلمات
+- keywords: من 2 إلى 5 كلمات إنجليزية مناسبة للبحث عن فيديوهات Pexels
+
+شكل JSON المطلوب:
 {{
-  "title": "عنوان عربي جذاب لا يزيد عن 90 حرفًا",
-  "description": "وصف عربي قصير للفيديو",
+  "title": "عنوان عربي جذاب",
+  "description": "وصف عربي قصير",
   "tags": ["وسم1", "وسم2", "وسم3"],
   "scenes": [
     {{
-      "narration": "نص التعليق الصوتي للمشهد بالعامية المصرية",
-      "onscreen_text": "عبارة عربية واضحة من 4 إلى 8 كلمات تظهر على الشاشة",
-      "keywords": "2 to 5 English words suitable for a Pexels stock-video search"
+      "narration": "نص التعليق الصوتي",
+      "onscreen_text": "عبارة قصيرة وواضحة",
+      "keywords": "phone vibration psychology"
     }}
   ]
 }}
@@ -78,27 +90,35 @@ def build_prompt(topic: str) -> str:
 
 
 def request_generation(client: Groq, prompt: str):
-    try:
-        # Prefer structured JSON when the model/provider accepts it.
-        return client.chat.completions.create(
-            model=MODEL,
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.8,
-            max_tokens=1800,
-            response_format={"type": "json_object"},
-        )
-    except Exception as first_error:
-        # Some Groq/model combinations reject response_format with
-        # json_validate_failed. Retry without provider-side JSON validation;
-        # parse_json_response() still validates the returned JSON locally.
-        print(f"Groq structured JSON request failed: {first_error}")
-        print("Retrying once without response_format...")
-        return client.chat.completions.create(
-            model=MODEL,
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.7,
-            max_tokens=1800,
-        )
+    # Do not use provider-side response_format here. The GPT-OSS model can
+    # reject strict JSON validation with json_validate_failed even when the
+    # prompt itself is valid. We validate and repair JSON locally instead.
+    return client.chat.completions.create(
+        model=MODEL,
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.7,
+        max_tokens=1800,
+    )
+
+
+def repair_json(client: Groq, raw: str) -> dict:
+    repair_prompt = f"""
+حوّل النص التالي إلى JSON صحيح فقط، بدون Markdown أو أي نص خارج JSON.
+يجب أن يحتوي JSON على title و description و tags و scenes.
+كل scene يجب أن يحتوي على narration و onscreen_text و keywords.
+لا تغيّر مضمون السيناريو إلا بالقدر اللازم لإصلاح JSON.
+
+النص:
+{raw}
+""".strip()
+
+    repaired = client.chat.completions.create(
+        model=MODEL,
+        messages=[{"role": "user", "content": repair_prompt}],
+        temperature=0.2,
+        max_tokens=1800,
+    )
+    return parse_json_response(repaired.choices[0].message.content or "")
 
 
 def main():
@@ -117,24 +137,9 @@ def main():
     try:
         data = parse_json_response(raw)
     except (ValueError, json.JSONDecodeError) as parse_error:
-        # One final repair request if the fallback model response is not valid JSON.
         print(f"Initial response was not valid JSON: {parse_error}")
-        repair_prompt = f"""
-حوّل النص التالي إلى JSON صحيح فقط، بدون Markdown أو أي نص خارج JSON.
-يجب أن يحتوي JSON على title و description و tags و scenes.
-كل scene يجب أن يحتوي على narration و onscreen_text و keywords.
-لا تغيّر مضمون السيناريو إلا بالقدر اللازم لإصلاح JSON.
-
-النص:
-{raw}
-""".strip()
-        repaired = client.chat.completions.create(
-            model=MODEL,
-            messages=[{"role": "user", "content": repair_prompt}],
-            temperature=0.2,
-            max_tokens=1800,
-        )
-        data = parse_json_response(repaired.choices[0].message.content or "")
+        print("Sending one repair request...")
+        data = repair_json(client, raw)
 
     script = {"topic": topic, "scenes": data["scenes"]}
     content = {
