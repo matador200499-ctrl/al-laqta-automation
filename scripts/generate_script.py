@@ -5,7 +5,7 @@ import re
 from groq import Groq
 
 
-MODEL = os.environ.get("GROQ_MODEL", "openai/gpt-oss-20b")
+MODEL = os.environ.get("GROQ_MODEL", "openai/gpt-oss-120b")
 DEFAULT_TOPIC = "غرائب وألغاز علمية مذهلة"
 
 
@@ -17,11 +17,9 @@ def get_topic() -> str:
                 return topic
         except OSError:
             pass
-
     queued_topic = os.environ.get("VIDEO_TOPIC", "").strip()
     if queued_topic:
         return queued_topic
-
     return DEFAULT_TOPIC
 
 
@@ -29,22 +27,18 @@ def parse_json_response(raw: str) -> dict:
     text = raw.strip()
     text = re.sub(r"^```(?:json)?\s*", "", text, flags=re.IGNORECASE)
     text = re.sub(r"\s*```$", "", text)
-
     start = text.find("{")
     end = text.rfind("}")
     if start == -1 or end == -1 or end <= start:
         raise ValueError("Groq response did not contain a JSON object")
-
     data = json.loads(text[start:end + 1])
     scenes = data.get("scenes")
     if not isinstance(scenes, list) or not scenes:
         raise ValueError("Generated JSON does not contain scenes")
-
     required = ("narration", "onscreen_text", "keywords")
     for index, scene in enumerate(scenes, start=1):
         if not isinstance(scene, dict) or any(not str(scene.get(key, "")).strip() for key in required):
             raise ValueError(f"Scene {index} is missing required fields")
-
     data["title"] = str(data.get("title") or "فيديو جديد - اللقطة").strip()
     data["description"] = str(data.get("description") or "").strip()
     tags = data.get("tags", [])
@@ -72,7 +66,7 @@ def build_prompt(topic: str) -> str:
 شكل JSON المطلوب:
 {{
   "title": "عنوان عربي جذاب",
-  "description": "وصف عربي قصير",
+  "description": "وصف عربي قصير للفيديو",
   "tags": ["وسم1", "وسم2", "وسم3"],
   "scenes": [
     {{
@@ -90,63 +84,66 @@ def build_prompt(topic: str) -> str:
 
 
 def request_generation(client: Groq, prompt: str):
-    # Do not use provider-side response_format here. The GPT-OSS model can
-    # reject strict JSON validation with json_validate_failed even when the
-    # prompt itself is valid. We validate and repair JSON locally instead.
     return client.chat.completions.create(
         model=MODEL,
         messages=[{"role": "user", "content": prompt}],
-        temperature=0.7,
-        max_tokens=1800,
+        temperature=0.4,
+        max_tokens=2200,
     )
 
 
 def repair_json(client: Groq, raw: str) -> dict:
     repair_prompt = f"""
-حوّل النص التالي إلى JSON صحيح فقط، بدون Markdown أو أي نص خارج JSON.
-يجب أن يحتوي JSON على title و description و tags و scenes.
-كل scene يجب أن يحتوي على narration و onscreen_text و keywords.
-لا تغيّر مضمون السيناريو إلا بالقدر اللازم لإصلاح JSON.
+أصلح النص التالي وأعده كـ JSON صحيح نحويًا فقط.
+مهم جدًا: لا تضف أي شرح أو Markdown. لا تغيّر المحتوى إلا لإصلاح JSON.
+يجب أن يحتوي الناتج على: title, description, tags, scenes.
+وكل scene يجب أن يحتوي على: narration, onscreen_text, keywords.
+يجب إغلاق كل علامات الاقتباس والأقواس، ووضع فاصلة بين كل خاصيتين متتاليتين.
 
-النص:
+النص المراد إصلاحه:
 {raw}
 """.strip()
-
     repaired = client.chat.completions.create(
         model=MODEL,
         messages=[{"role": "user", "content": repair_prompt}],
-        temperature=0.2,
-        max_tokens=1800,
+        temperature=0.0,
+        max_tokens=2200,
     )
     return parse_json_response(repaired.choices[0].message.content or "")
+
+
+def generate_with_retry(client: Groq, prompt: str) -> dict:
+    last_error = None
+    raw = ""
+    for attempt in range(2):
+        try:
+            completion = request_generation(client, prompt)
+            raw = completion.choices[0].message.content or ""
+            return parse_json_response(raw)
+        except Exception as error:
+            last_error = error
+            print(f"Generation attempt {attempt + 1} returned invalid JSON: {error}")
+    for attempt in range(2):
+        try:
+            print(f"Sending JSON repair request ({attempt + 1}/2)...")
+            return repair_json(client, raw)
+        except Exception as error:
+            last_error = error
+            print(f"Repair attempt {attempt + 1} failed: {error}")
+    raise RuntimeError(f"Groq could not produce valid script JSON after retries: {last_error}")
 
 
 def main():
     api_key = os.environ.get("GROQ_API_KEY")
     if not api_key:
         raise RuntimeError("GROQ_API_KEY is not configured")
-
     topic = get_topic()
     print(f"Generating for topic: {topic} with model {MODEL}")
-
-    prompt = build_prompt(topic)
     client = Groq(api_key=api_key)
-    completion = request_generation(client, prompt)
-
-    raw = completion.choices[0].message.content or ""
-    try:
-        data = parse_json_response(raw)
-    except (ValueError, json.JSONDecodeError) as parse_error:
-        print(f"Initial response was not valid JSON: {parse_error}")
-        print("Sending one repair request...")
-        data = repair_json(client, raw)
+    data = generate_with_retry(client, build_prompt(topic))
 
     script = {"topic": topic, "scenes": data["scenes"]}
-    content = {
-        "title": data["title"],
-        "description": data["description"],
-        "tags": data["tags"],
-    }
+    content = {"title": data["title"], "description": data["description"], "tags": data["tags"]}
 
     os.makedirs("output", exist_ok=True)
     with open("script.json", "w", encoding="utf-8") as file:
@@ -158,7 +155,6 @@ def main():
     for path in ("script.txt", "output/script.txt", "output/story.txt"):
         with open(path, "w", encoding="utf-8") as file:
             file.write(narration)
-
     print(f"DONE: generated {len(script['scenes'])} scenes")
 
 
