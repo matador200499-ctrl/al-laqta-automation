@@ -13,6 +13,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-python@v5
         with:
@@ -60,11 +62,20 @@ jobs:
 
       - name: Save topic rotation
         run: |
+          set -e
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add topics.txt used_topics.txt
           if ! git diff --cached --quiet; then
             git commit -m "Rotate published video topic"
-            git pull --rebase origin main
-            git push origin main
+            for attempt in 1 2 3; do
+              if git pull --rebase origin main && git push origin main; then
+                echo "Topic rotation saved successfully"
+                exit 0
+              fi
+              echo "Push attempt $attempt failed; retrying in 15 seconds..."
+              sleep 15
+            done
+            echo "Failed to save topic rotation after 3 attempts"
+            exit 1
           fi
