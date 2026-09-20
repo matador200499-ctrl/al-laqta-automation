@@ -1,4 +1,4 @@
-import os,base64,requests,time,subprocess
+import os,base64,requests,time,subprocess,json
 from pathlib import Path
 
 G=os.environ["GEMINI_API_KEY"]
@@ -13,17 +13,53 @@ Around two minutes, with a clear intro, verses, catchy chorus, bridge and outro.
 Modern Egyptian pop production, emotional male and female vocals, piano, guitar, warm synths and drums.
 Write original lyrics only. Do not imitate or reference any named artist."""
 
-r=requests.post(
-    "https://generativelanguage.googleapis.com/v1beta/models/lyria-3.5:generateContent",
-    headers={"x-goog-api-key":G,"Content-Type":"application/json"},
-    json={
-        "contents":[{"parts":[{"text":song_prompt}]}],
-        "generationConfig":{"responseModalities":["AUDIO","TEXT"]}
-    },
-    timeout=300
-)
-if not r.ok:
-    raise RuntimeError(f"Lyria API HTTP {r.status_code}: {r.text[:2000]}")
+lyria_model = os.getenv("LYRIA_MODEL", "lyria-3.5")
+lyria_url = f"https://generativelanguage.googleapis.com/v1beta/models/{lyria_model}:generateContent"
+payload = {
+    "contents":[{"parts":[{"text":song_prompt}]}],
+    "generationConfig":{"responseModalities":["AUDIO","TEXT"]}
+}
+
+# Retry only transient rate limits. A daily free-tier limit of zero cannot be
+# fixed by sleeping, so fail with the actual remediation instead of burning
+# the workflow timeout.
+for attempt in range(3):
+    r = requests.post(
+        lyria_url,
+        headers={"x-goog-api-key":G,"Content-Type":"application/json"},
+        json=payload,
+        timeout=300
+    )
+    if r.ok:
+        break
+    if r.status_code != 429:
+        raise RuntimeError(f"Lyria API HTTP {r.status_code}: {r.text[:2000]}")
+    try:
+        err = r.json().get("error", {})
+        message = err.get("message", r.text[:2000])
+        quota_ids = [
+            v.get("quotaId", "")
+            for d in err.get("details", [])
+            if d.get("@type", "").endswith("QuotaFailure")
+            for v in d.get("violations", [])
+        ]
+    except (ValueError, TypeError):
+        message, quota_ids = r.text[:2000], []
+    if any("PerDay" in q for q in quota_ids):
+        raise RuntimeError(
+            "Lyria daily quota is exhausted or disabled for this API project. "
+            "Enable billing for the Google AI project or replace GEMINI_API_KEY "
+            "with a key from a project that has Lyria quota. Details: " + message
+        )
+    if attempt == 2:
+        raise RuntimeError(f"Lyria rate limit persisted after retries: {message}")
+    retry_after = r.headers.get("Retry-After")
+    try:
+        delay = max(5, min(90, int(float(retry_after)))) if retry_after else 20 * (attempt + 1)
+    except ValueError:
+        delay = 20 * (attempt + 1)
+    print(f"Lyria rate-limited; retrying in {delay}s ({attempt + 1}/3)", flush=True)
+    time.sleep(delay)
 
 j=r.json()
 audio_data=None
