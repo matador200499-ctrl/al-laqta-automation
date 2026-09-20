@@ -1,4 +1,4 @@
-import os,base64,requests,time,subprocess,json
+import os,base64,requests,time,subprocess
 from pathlib import Path
 
 G=os.environ["GEMINI_API_KEY"]
