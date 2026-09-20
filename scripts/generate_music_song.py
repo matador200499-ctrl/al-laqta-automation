@@ -33,3 +33,10 @@ for n,p in enumerate(scenes,1):
     v=requests.get(u,headers={"x-goog-api-key":G},timeout=180); v.raise_for_status()
     (R/f"scene_{n:02d}.mp4").write_bytes(v.content)
     print(f"scene {n}/12 ready")
+
+files=sorted(R.glob("scene_*.mp4"))
+(R/"concat.txt").write_text("".join("file '"+str(x.resolve())+"\\n" for x in files),encoding="utf-8")
+subprocess.run(["ffmpeg","-y","-f","concat","-safe","0","-i",str(R/"concat.txt"),"-an","-c:v","libx264","-pix_fmt","yuv420p",str(R/"visuals.mp4")],check=True)
+subprocess.run(["ffmpeg","-y","-stream_loop","-1","-i",str(R/"visuals.mp4"),"-i",str(R/"song.mp3"),"-map","0:v:0","-map","1:a:0","-c:v","copy","-c:a","aac","-b:a","192k","-shortest","-movflags","+faststart","final_music_video.mp4"],check=True)
+Path("content.json").write_text('{"title":"أغنية مصرية أصلية جديدة","description":"أغنية أصلية وكليب سينمائي مولدان بالذكاء الاصطناعي.","tags":["أغاني","موسيقى","أغاني مصرية","أغاني عربية","AI music","كليب"]}',encoding="utf-8")
+print("MUSIC VIDEO READY")
