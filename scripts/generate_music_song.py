@@ -66,6 +66,11 @@ lyrics=(result[0].get("lyrics", "") if isinstance(result,list) else result.get("
 Path("lyrics.txt").write_text(lyrics,encoding="utf-8")
 print("ACE-Step song ready", flush=True)
 
+PEXELS_KEY=os.environ.get("PEXELS_API_KEY", "")
+if not PEXELS_KEY:
+    raise RuntimeError("PEXELS_API_KEY is not configured")
+PEXELS_SEARCH="https://api.pexels.com/videos/search"
+
 scenes=[
 "Cairo rooftop at night, fictional young Egyptian man Omar with short dark hair and light beard, black jacket, looking over city lights.",
 "Fictional young Egyptian woman Laila with long dark hair and beige jacket arrives at the rooftop and sees Omar.",
@@ -78,37 +83,47 @@ scenes=[
 "Omar and Laila return to the rooftop, Cairo skyline glowing behind them.",
 "They exchange a small handwritten note and smile, cinematic close-up.",
 "Dawn begins over Cairo as Omar and Laila stand side by side.",
-"Wide final shot of Omar and Laila walking together into the Cairo sunrise."
+    "Wide final shot of Omar and Laila walking together into the Cairo sunrise."
 ]
 
+def best_video_url(video):
+    files=[f for f in video.get("video_files",[]) if f.get("link") and f.get("width",0)>=1280]
+    if not files:
+        files=[f for f in video.get("video_files",[]) if f.get("link")]
+    return sorted(files,key=lambda f:f.get("width",0))[0]["link"] if files else None
+
+def download_scene(prompt, n):
+    terms=prompt.replace(",", " ")
+    q=requests.get(PEXELS_SEARCH,headers={"Authorization":PEXELS_KEY},params={
+        "query":terms,"orientation":"landscape","size":"medium","per_page":5
+    },timeout=30)
+    q.raise_for_status()
+    videos=q.json().get("videos",[])
+    url=best_video_url(videos[0]) if videos else None
+    if not url:
+        fallback=requests.get(PEXELS_SEARCH,headers={"Authorization":PEXELS_KEY},params={
+            "query":"Cairo night city cinematic","orientation":"landscape","size":"medium","per_page":5
+        },timeout=30)
+        fallback.raise_for_status()
+        videos=fallback.json().get("videos",[])
+        url=best_video_url(videos[0]) if videos else None
+    if not url:
+        raise RuntimeError(f"No Pexels video found for scene {n}: {prompt}")
+    video=requests.get(url,stream=True,timeout=120)
+    video.raise_for_status()
+    path=R/f"scene_{n:02d}.mp4"
+    with path.open("wb") as out:
+        for chunk in video.iter_content(chunk_size=1024*1024):
+            if chunk:
+                out.write(chunk)
+    return path
+
 for n,p in enumerate(scenes,1):
-    x=requests.post(
-        "https://generativelanguage.googleapis.com/v1beta/models/veo-3.1-generate-preview:predictLongRunning",
-        headers={"x-goog-api-key":G,"Content-Type":"application/json"},
-        json={"instances":[{"prompt":p+" 8-second realistic cinematic music-video shot, no text, no logos."}],
-              "parameters":{"aspectRatio":"16:9","resolution":"720p","numberOfVideos":1}},
-        timeout=60
-    )
-    if not x.ok:
-        raise RuntimeError(f"Veo API HTTP {x.status_code}: {x.text[:2000]}")
-    op=x.json()["name"]
-    while True:
-        s=requests.get("https://generativelanguage.googleapis.com/v1beta/"+op,headers={"x-goog-api-key":G},timeout=60)
-        if not s.ok:
-            raise RuntimeError(f"Veo polling HTTP {s.status_code}: {s.text[:2000]}")
-        z=s.json()
-        if z.get("done"):
-            break
-        time.sleep(10)
-    u=z["response"]["generateVideoResponse"]["generatedSamples"][0]["video"]["uri"]
-    v=requests.get(u,headers={"x-goog-api-key":G},timeout=180)
-    if not v.ok:
-        raise RuntimeError(f"Veo download HTTP {v.status_code}: {v.text[:1000]}")
-    (R/f"scene_{n:02d}.mp4").write_bytes(v.content)
-    print(f"scene {n}/12 ready")
+    download_scene(p,n)
+    print(f"Pexels scene {n}/{len(scenes)} ready", flush=True)
 
 files=sorted(R.glob("scene_*.mp4"))
-(R/"concat.txt").write_text("".join("file '"+str(x.resolve())+"\n" for x in files),encoding="utf-8")
+(R/"concat.txt").write_text("".join(f"file '{x.resolve()}'\n" for x in files),encoding="utf-8")
 subprocess.run(["ffmpeg","-y","-f","concat","-safe","0","-i",str(R/"concat.txt"),"-an","-c:v","libx264","-pix_fmt","yuv420p",str(R/"visuals.mp4")],check=True)
 subprocess.run(["ffmpeg","-y","-stream_loop","-1","-i",str(R/"visuals.mp4"),"-i",str(R/"song.mp3"),"-map","0:v:0","-map","1:a:0","-c:v","copy","-c:a","aac","-b:a","192k","-shortest","-movflags","+faststart","final_music_video.mp4"],check=True)
 Path("content.json").write_text('{"title":"أغنية مصرية أصلية جديدة","description":"أغنية أصلية وكليب سينمائي مولدان بالذكاء الاصطناعي.","tags":["أغاني","موسيقى","أغاني مصرية","أغاني عربية","AI music","كليب"]}',encoding="utf-8")
