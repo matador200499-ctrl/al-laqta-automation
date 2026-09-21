@@ -100,3 +100,38 @@ Settings → Secrets and variables → Actions → New repository secret:
 - **تغيير صوت الراوي**: غيّر `TTS_VOICE` في `scripts/generate_voice.py` (أصوات عربية تانية متاحة: `ar-EG-SalmaNeural`, `ar-SA-HamedNeural`, `ar-SA-ZariyahNeural`).
 - **تغيير عدد مرات النشر**: عدّل سطر `cron` في `publish_video.yml`.
 - **تغيير مدة الفيديو**: عدّل عدد الكلمات المطلوب في `scripts/generate_script.py` (تم ضبطه حالياً لـ 15 دقيقة).
+
+
+## 6) توليد الأغنية مجانًا باستخدام ACE-Step 1.5
+
+بدلًا من Lyria، يستخدم سير العمل الآن خادم ACE-Step 1.5 مفتوح المصدر لتوليد الأغنية. يجب تشغيل ACE-Step على جهاز GPU أو بيئة GPU خارج GitHub Actions، لأن GitHub Actions لا يوفر GPU مناسبًا لهذا النموذج.
+
+ثبّت ACE-Step على جهاز التوليد وفق [التعليمات الرسمية](https://github.com/ace-step/ACE-Step-1.5)، ثم شغّل خادم API:
+
+```bash
+uv run acestep-api --host 0.0.0.0 --port 8001
+```
+
+إذا فعّلت حماية API، عيّن مفتاحًا للخادم:
+
+```bash
+export ACESTEP_API_KEY='ضع-مفتاحًا-طويلًا-عشوائيًا-هنا'
+uv run acestep-api --host 0.0.0.0 --port 8001 --api-key "$ACESTEP_API_KEY"
+```
+
+يجب أن يكون عنوان الخادم قابلًا للوصول من GitHub Actions عبر HTTPS. لا تستخدم `localhost` أو عنوانًا داخليًا. اختبره أولًا:
+
+```bash
+curl https://YOUR-ACE-STEP-HOST/health
+```
+
+أضف الأسرار التالية إلى GitHub Actions:
+
+| السر | القيمة |
+|---|---|
+| `ACE_STEP_API_URL` | عنوان HTTPS لخادم ACE-Step، بدون `/` في النهاية |
+| `ACE_STEP_API_KEY` | مفتاح الخادم، أو اتركه فارغًا إذا عطّلت حماية API |
+
+بعد ذلك شغّل workflow يدويًا. سيطلب السكربت أغنية مصرية عربية مدتها نحو دقيقتين، ينتظر اكتمال المهمة، وينزل `song.mp3` ثم يكمل تركيب الفيديو.
+
+> ملاحظة: خدمة ACE-Step مجانية من ناحية النموذج، لكن تشغيل جهاز GPU أو خدمة GPU خارجية قد تكون له تكلفة. كما أن مرحلة الفيديو الحالية ما زالت تستخدم Veo؛ إذا كانت الحصة المجانية لـ Veo غير متاحة، يلزم استبدالها أيضًا بمقاطع Pexels أو صور محلية.

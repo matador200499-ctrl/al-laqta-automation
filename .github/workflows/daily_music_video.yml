@@ -21,7 +21,8 @@ jobs:
           pip install requests
       - name: Generate song and video
         env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          ACE_STEP_API_URL: ${{ secrets.ACE_STEP_API_URL }}
+          ACE_STEP_API_KEY: ${{ secrets.ACE_STEP_API_KEY }}
         run: python scripts/generate_music_song.py
       - name: Upload to YouTube
         env:

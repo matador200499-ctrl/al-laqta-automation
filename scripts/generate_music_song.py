@@ -1,82 +1,70 @@
-import os,base64,requests,time,subprocess
+import os,json,requests,time,subprocess
 from pathlib import Path
 
-G=os.environ["GEMINI_API_KEY"]
+ACE_STEP_URL=os.environ.get("ACE_STEP_API_URL", "").rstrip("/")
+ACE_STEP_KEY=os.environ.get("ACE_STEP_API_KEY", "")
 R=Path("music_work")
 R.mkdir(exist_ok=True)
 
-# Use the standard generateContent endpoint for Lyria 3.5.
-# It is officially supported for full-length songs and avoids the
-# Interactions endpoint permission path that returned HTTP 403.
-song_prompt = """Create and sing an original Egyptian Arabic pop song about two fictional lovers in Cairo.
+song_prompt = """Original Egyptian Arabic pop song about two fictional lovers in Cairo.
 Around two minutes, with a clear intro, verses, catchy chorus, bridge and outro.
 Modern Egyptian pop production, emotional male and female vocals, piano, guitar, warm synths and drums.
 Write original lyrics only. Do not imitate or reference any named artist."""
 
-lyria_model = os.getenv("LYRIA_MODEL", "lyria-3.5")
-lyria_url = f"https://generativelanguage.googleapis.com/v1beta/models/{lyria_model}:generateContent"
-payload = {
-    "contents":[{"parts":[{"text":song_prompt}]}],
-    "generationConfig":{"responseModalities":["AUDIO","TEXT"]}
-}
-
-# Retry only transient rate limits. A daily free-tier limit of zero cannot be
-# fixed by sleeping, so fail with the actual remediation instead of burning
-# the workflow timeout.
-for attempt in range(3):
-    r = requests.post(
-        lyria_url,
-        headers={"x-goog-api-key":G,"Content-Type":"application/json"},
-        json=payload,
-        timeout=300
+if not ACE_STEP_URL:
+    raise RuntimeError(
+        "ACE_STEP_API_URL is not configured. Run ACE-Step 1.5 on a GPU machine "
+        "and add its URL as a GitHub Actions secret. See README.md."
     )
-    if r.ok:
+
+headers={"Content-Type":"application/json"}
+if ACE_STEP_KEY:
+    headers["Authorization"]="Bearer "+ACE_STEP_KEY
+
+payload={
+    "sample_query": song_prompt,
+    "thinking": True,
+    "vocal_language": "ar",
+    "audio_duration": 120,
+    "audio_format": "mp3",
+    "model": "acestep-v15-turbo"
+}
+r=requests.post(f"{ACE_STEP_URL}/release_task",headers=headers,json=payload,timeout=60)
+if not r.ok:
+    raise RuntimeError(f"ACE-Step submit HTTP {r.status_code}: {r.text[:2000]}")
+submitted=r.json()
+task_id=(submitted.get("data") or {}).get("task_id")
+if not task_id:
+    raise RuntimeError("ACE-Step returned no task_id: "+str(submitted)[:2000])
+
+result=None
+for _ in range(180):
+    q=requests.post(f"{ACE_STEP_URL}/query_result",headers=headers,json={"task_id_list":[task_id]},timeout=60)
+    if not q.ok:
+        raise RuntimeError(f"ACE-Step query HTTP {q.status_code}: {q.text[:2000]}")
+    rows=(q.json().get("data") or [])
+    row=rows[0] if rows else {}
+    status=row.get("status")
+    if status == 1:
+        raw=row.get("result", "[]")
+        result=json.loads(raw) if isinstance(raw,str) else raw
         break
-    if r.status_code != 429:
-        raise RuntimeError(f"Lyria API HTTP {r.status_code}: {r.text[:2000]}")
-    try:
-        err = r.json().get("error", {})
-        message = err.get("message", r.text[:2000])
-        quota_ids = [
-            v.get("quotaId", "")
-            for d in err.get("details", [])
-            if d.get("@type", "").endswith("QuotaFailure")
-            for v in d.get("violations", [])
-        ]
-    except (ValueError, TypeError):
-        message, quota_ids = r.text[:2000], []
-    if any("PerDay" in q for q in quota_ids):
-        raise RuntimeError(
-            "Lyria daily quota is exhausted or disabled for this API project. "
-            "Enable billing for the Google AI project or replace GEMINI_API_KEY "
-            "with a key from a project that has Lyria quota. Details: " + message
-        )
-    if attempt == 2:
-        raise RuntimeError(f"Lyria rate limit persisted after retries: {message}")
-    retry_after = r.headers.get("Retry-After")
-    try:
-        delay = max(5, min(90, int(float(retry_after)))) if retry_after else 20 * (attempt + 1)
-    except ValueError:
-        delay = 20 * (attempt + 1)
-    print(f"Lyria rate-limited; retrying in {delay}s ({attempt + 1}/3)", flush=True)
-    time.sleep(delay)
+    if status == 2:
+        raise RuntimeError("ACE-Step generation failed: "+str(row)[:2000])
+    time.sleep(10)
+if not result:
+    raise RuntimeError("ACE-Step generation timed out after 30 minutes")
 
-j=r.json()
-audio_data=None
-lyrics=[]
-for candidate in j.get("candidates",[]):
-    for part in candidate.get("content",{}).get("parts",[]):
-        if part.get("text"):
-            lyrics.append(part["text"])
-        inline=part.get("inline_data") or part.get("inlineData")
-        if inline and inline.get("data"):
-            audio_data=inline["data"]
-
-if not audio_data:
-    raise RuntimeError("Lyria returned no audio data. Response: "+str(j)[:2000])
-
-(R/"song.mp3").write_bytes(base64.b64decode(audio_data))
-Path("lyrics.txt").write_text("\n\n".join(lyrics),encoding="utf-8")
+audio_path=result[0].get("file") if isinstance(result,list) else result.get("file")
+if not audio_path:
+    raise RuntimeError("ACE-Step returned no audio file: "+str(result)[:2000])
+audio=requests.get(f"{ACE_STEP_URL}{audio_path}",headers=headers,timeout=180)
+if not audio.ok:
+    raise RuntimeError(f"ACE-Step audio download HTTP {audio.status_code}: {audio.text[:1000]}")
+(R/"song.mp3").write_bytes(audio.content)
+lyrics=(result[0].get("lyrics", "") if isinstance(result,list) else result.get("lyrics", ""))
+Path("lyrics.txt").write_text(lyrics,encoding="utf-8")
+print("ACE-Step song ready", flush=True)
 
 scenes=[
 "Cairo rooftop at night, fictional young Egyptian man Omar with short dark hair and light beard, black jacket, looking over city lights.",
