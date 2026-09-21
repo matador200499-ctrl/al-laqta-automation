@@ -41,6 +41,9 @@ jobs:
       - name: Generate voice
         run: python scripts/generate_voice.py
 
+      - name: Generate free background music
+        run: python scripts/generate_background_music.py
+
       - name: Fetch clips
         env:
           PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}

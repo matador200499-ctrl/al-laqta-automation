@@ -182,11 +182,20 @@ def main():
         "-c", "copy", "full_audio.mp3",
     ])
 
-    # 3) دمج الصوت مع الفيديو
-    run([
-        "ffmpeg", "-y", "-i", "video_only.mp4", "-i", "full_audio.mp3",
-        "-c:v", "copy", "-c:a", "aac", "-shortest", "final_video.mp4",
-    ])
+    # 3) مزج التعليق الصوتي مع الموسيقى الخلفية إن وُجدت
+    if os.path.exists("music/background.mp3"):
+        run([
+            "ffmpeg", "-y", "-i", "video_only.mp4", "-i", "full_audio.mp3",
+            "-i", "music/background.mp3", "-filter_complex",
+            "[1:a]volume=1.0[voice];[2:a]volume=0.22[bg];[voice][bg]amix=inputs=2:duration=first:dropout_transition=2[mix]",
+            "-map", "0:v:0", "-map", "[mix]", "-c:v", "copy", "-c:a", "aac",
+            "-b:a", "192k", "-shortest", "final_video.mp4",
+        ])
+    else:
+        run([
+            "ffmpeg", "-y", "-i", "video_only.mp4", "-i", "full_audio.mp3",
+            "-c:v", "copy", "-c:a", "aac", "-shortest", "final_video.mp4",
+        ])
 
     print("تم إنشاء الفيديو النهائي: final_video.mp4")
 
