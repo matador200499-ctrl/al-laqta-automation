@@ -1,8 +1,6 @@
-name: Daily AI Song Video
+name: Optional ACE-Step Song Video
 
 on:
-  schedule:
-    - cron: '30 19 * * *'
   workflow_dispatch:
 
 jobs:
