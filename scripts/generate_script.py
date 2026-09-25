@@ -39,8 +39,8 @@ def parse_json_response(raw: str) -> dict:
         raise ValueError("Groq response did not contain a JSON object")
     data = json.loads(text[start:end + 1])
     scenes = data.get("scenes")
-    if not isinstance(scenes, list) or len(scenes) < 5 or len(scenes) > 8:
-        raise ValueError("Generated JSON must contain 5 to 8 scenes")
+    if not isinstance(scenes, list) or len(scenes) != 6:
+        raise ValueError("Generated JSON must contain exactly 6 scenes")
     required = ("narration", "onscreen_text", "keywords")
     for index, scene in enumerate(scenes, start=1):
         if not isinstance(scene, dict) or any(not str(scene.get(key, "")).strip() for key in required):
@@ -70,7 +70,7 @@ def build_prompt(topic: str) -> str:
 4) استخدم شخصيات ثابتة وأسماء واضحة وحافظ على استمرارية السلسلة.
 5) العامية المصرية السهلة والمفهومة عربيًا.
 6) إجمالي الكلام MUST be enough for 50 إلى 60 ثانية. استهدف 120 إلى 150 كلمة عربية إجمالًا.
-7) من 5 إلى 8 مشاهد قصيرة، وكل مشهد 18 إلى 25 كلمة عربية تقريبًا.
+7) استخدم بالضبط 6 مشاهد قصيرة، وكل مشهد 18 إلى 25 كلمة عربية تقريبًا.
 8) onscreen_text قصير جدًا وواضح، من 4 إلى 8 كلمات، ليُقرأ على الهاتف والتلفزيون.
 9) لا تستخدم شخصيات عامة أو أغانٍ أو نصوصًا محمية بحقوق نشر.
 10) اختم بتشويق طبيعي للحلقة التالية، بدون طلب مبالغ فيه للاشتراك.
@@ -80,7 +80,7 @@ def build_prompt(topic: str) -> str:
 - title: عنوان جذاب لا يزيد عن 80 حرفًا، ويحتوي على اسم السلسلة ورقم الحلقة.
 - description: وصف قصير، وينتهي بجملة "الحلقة التالية من السلسلة قريبًا."
 - tags: من 5 إلى 8 وسوم عربية مناسبة.
-- scenes: من 6 إلى 7 مشاهد.
+- scenes: بالضبط 6 مشاهد.
 
 كل مشهد يحتوي على:
 - narration: من جملة إلى ثلاث جمل قصيرة.
@@ -94,7 +94,8 @@ def request_generation(client: Groq, prompt: str):
         model=MODEL,
         messages=[{"role": "user", "content": prompt}],
         temperature=0.4,
-        max_tokens=2200,
+        max_tokens=3000,
+        response_format={"type": "json_object"},
     )
 
 
@@ -104,7 +105,7 @@ def repair_json(client: Groq, raw: str) -> dict:
 مهم جدًا: لا تضف أي شرح أو Markdown. لا تغيّر المحتوى إلا لإصلاح JSON.
 يجب أن يحتوي الناتج على: title, description, tags, scenes.
 وكل scene يجب أن يحتوي على: narration, onscreen_text, keywords.
-يجب إغلاق كل علامات الاقتباس والأقواس، ووضع فاصلة بين كل خاصيتين متتاليتين.
+يجب أن يحتوي الناتج على بالضبط 6 مشاهد. يجب إغلاق كل علامات الاقتباس والأقواس، ووضع فاصلة بين كل خاصيتين متتاليتين.
 
 النص المراد إصلاحه:
 {raw}
@@ -113,7 +114,8 @@ def repair_json(client: Groq, raw: str) -> dict:
         model=MODEL,
         messages=[{"role": "user", "content": repair_prompt}],
         temperature=0.0,
-        max_tokens=2200,
+        max_tokens=3000,
+        response_format={"type": "json_object"},
     )
     return parse_json_response(repaired.choices[0].message.content or "")
 
