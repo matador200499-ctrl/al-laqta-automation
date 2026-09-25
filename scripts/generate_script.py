@@ -23,6 +23,12 @@ def get_topic() -> str:
     return DEFAULT_TOPIC
 
 
+def parse_episode(topic: str):
+    match = re.search(r"سلسلة\s*:\s*([^|]+)\|\s*الحلقة\s*(\d+)\s*\|\s*(.+)", topic)
+    if not match:
+        return {"series": "قصة لم تنتهِ", "episode": 1, "plot": topic.strip()}
+    return {"series": match.group(1).strip(), "episode": int(match.group(2)), "plot": match.group(3).strip()}
+
 def parse_json_response(raw: str) -> dict:
     text = raw.strip()
     text = re.sub(r"^```(?:json)?\s*", "", text, flags=re.IGNORECASE)
@@ -33,8 +39,8 @@ def parse_json_response(raw: str) -> dict:
         raise ValueError("Groq response did not contain a JSON object")
     data = json.loads(text[start:end + 1])
     scenes = data.get("scenes")
-    if not isinstance(scenes, list) or not scenes:
-        raise ValueError("Generated JSON does not contain scenes")
+    if not isinstance(scenes, list) or len(scenes) < 6 or len(scenes) > 7:
+        raise ValueError("Generated JSON must contain 6 or 7 scenes")
     required = ("narration", "onscreen_text", "keywords")
     for index, scene in enumerate(scenes, start=1):
         if not isinstance(scene, dict) or any(not str(scene.get(key, "")).strip() for key in required):
