@@ -14,6 +14,7 @@ import json
 import os
 import re
 import subprocess
+import glob
 
 import arabic_reshaper
 from bidi.algorithm import get_display
@@ -23,7 +24,11 @@ WIDTH, HEIGHT = 1920, 1080
 FONT_PATH = os.environ.get("ARABIC_FONT_PATH", "/usr/share/fonts/truetype/noto/NotoNaskhArabic-Bold.ttf")
 FONT_CANDIDATES = (
     FONT_PATH,
+    "/usr/share/fonts/truetype/noto/NotoNaskhArabic-Bold.ttf",
+    "/usr/share/fonts/truetype/noto/NotoNaskhArabic-Regular.ttf",
     "/usr/share/fonts/truetype/noto/NotoSansArabic-Bold.ttf",
+    "/usr/share/fonts/truetype/noto/NotoSansArabic-Regular.ttf",
+    "/usr/share/fonts/truetype/noto/NotoKufiArabic-Bold.ttf",
     "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
 )
 
@@ -34,10 +39,20 @@ def run(cmd: list[str]):
 
 
 def load_font(size: int):
-    for path in FONT_CANDIDATES:
-        if path and os.path.exists(path):
-            return ImageFont.truetype(path, size)
-    raise FileNotFoundError("لم يتم العثور على خط عربي مناسب")
+    candidates = list(FONT_CANDIDATES)
+    candidates.extend(glob.glob("/usr/share/fonts/truetype/**/**Arabic*.ttf", recursive=True))
+    seen = set()
+    for path in candidates:
+        if path and path not in seen and os.path.exists(path):
+            seen.add(path)
+            try:
+                font = ImageFont.truetype(path, size)
+                # تأكد أن الخط يحتوي على حروف عربية فعلًا، وليس مربعات.
+                if font.getbbox("ابتثجحخدذرزسشصضطظعغفقكلمنهوي") is not None:
+                    return font
+            except Exception:
+                continue
+    raise FileNotFoundError("لم يتم العثور على خط عربي صالح يدعم الحروف العربية")
 
 
 def rtl_text(text: str):
