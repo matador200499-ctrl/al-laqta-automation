@@ -21,7 +21,7 @@ from bidi.algorithm import get_display
 from PIL import Image, ImageDraw, ImageFont
 
 WIDTH, HEIGHT = 1920, 1080
-FONT_PATH = os.environ.get("ARABIC_FONT_PATH", "/usr/share/fonts/truetype/noto/NotoNaskhArabic-Bold.ttf")
+FONT_PATH = os.environ.get("ARABIC_FONT_PATH", "/usr/share/fonts/truetype/noto/NotoNaskhArabic-Regular.ttf")
 FONT_CANDIDATES = (
     FONT_PATH,
     "/usr/share/fonts/truetype/noto/NotoNaskhArabic-Bold.ttf",
@@ -39,16 +39,23 @@ def run(cmd: list[str]):
 
 
 def load_font(size: int):
-    candidates = list(FONT_CANDIDATES)
-    candidates.extend(glob.glob("/usr/share/fonts/truetype/**/**Arabic*.ttf", recursive=True))
+    candidates = [
+        FONT_PATH,
+        "/usr/share/fonts/truetype/noto/NotoNaskhArabic-Regular.ttf",
+        "/usr/share/fonts/truetype/noto/NotoNaskhArabic-Bold.ttf",
+        "/usr/share/fonts/truetype/noto/NotoSansArabic-Regular.ttf",
+        "/usr/share/fonts/truetype/noto/NotoSansArabic-Bold.ttf",
+    ]
+    candidates.extend(sorted(glob.glob("/usr/share/fonts/truetype/**/NotoNaskhArabic*.ttf", recursive=True)))
+    candidates.extend(sorted(glob.glob("/usr/share/fonts/truetype/**/NotoSansArabic*.ttf", recursive=True)))
     seen = set()
     for path in candidates:
         if path and path not in seen and os.path.exists(path):
             seen.add(path)
             try:
                 font = ImageFont.truetype(path, size)
-                # تأكد أن الخط يحتوي على حروف عربية فعلًا، وليس مربعات.
-                if font.getbbox("ابتثجحخدذرزسشصضطظعغفقكلمنهوي") is not None:
+                # Noto Arabic fonts are known to contain the Arabic glyphs.
+                if font.getbbox("مرحبا بالعالم") is not None:
                     return font
             except Exception:
                 continue
