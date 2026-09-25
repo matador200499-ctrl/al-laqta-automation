@@ -52,6 +52,9 @@ def parse_json_response(raw: str) -> dict:
     for index, scene in enumerate(scenes, start=1):
         if not isinstance(scene, dict) or any(not str(scene.get(key, "")).strip() for key in required):
             raise ValueError(f"Scene {index} is missing required fields")
+        onscreen_words = len(str(scene.get("onscreen_text", "")).split())
+        if onscreen_words < 4 or onscreen_words > 8:
+            raise ValueError(f"Scene {index} onscreen_text must contain 4-8 words, got {onscreen_words}")
     data["title"] = str(data.get("title") or "فيديو جديد - اللقطة").strip()
     data["description"] = str(data.get("description") or "").strip()
     tags = data.get("tags", [])
