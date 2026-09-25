@@ -52,7 +52,9 @@ def parse_json_response(raw: str) -> dict:
     for index, scene in enumerate(scenes, start=1):
         if not isinstance(scene, dict) or any(not str(scene.get(key, "")).strip() for key in required):
             raise ValueError(f"Scene {index} is missing required fields")
-    data["title"] = str(data.get("title") or "فيديو جديد - اللقطة").strip()
+    data["title"] = str(data.get("title") or "حكاية جديدة - اللقطة").strip()
+    if not re.search(r"[\u0600-\u06FF]", data["title"]):
+        data["title"] = "حكاية جديدة من اللقطة"
     data["description"] = str(data.get("description") or "").strip()
     tags = data.get("tags", [])
     data["tags"] = tags if isinstance(tags, list) else []
@@ -84,8 +86,9 @@ def build_prompt(topic: str) -> str:
 
 أعد JSON صحيح فقط بدون Markdown.
 المفاتيح:
-- title: عنوان جذاب لا يزيد عن 80 حرفًا، ويحتوي على اسم السلسلة ورقم الحلقة.
-- description: وصف قصير، وينتهي بجملة "الحلقة التالية من السلسلة قريبًا."
+- title: عنوان عربي جذاب لا يزيد عن 80 حرفًا، ويحتوي على اسم السلسلة ورقم الحلقة. ممنوع الإنجليزية.
+- description: وصف عربي قصير، وينتهي بجملة "الحلقة التالية من السلسلة قريبًا." ممنوع الإنجليزية.
+- onscreen_text يجب أن يكون عربيًا فقط وواضحًا ومقروءًا.
 - tags: من 5 إلى 8 وسوم عربية مناسبة.
 - scenes: بالضبط 6 مشاهد.
 
