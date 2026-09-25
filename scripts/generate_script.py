@@ -41,6 +41,13 @@ def parse_json_response(raw: str) -> dict:
     scenes = data.get("scenes")
     if not isinstance(scenes, list) or len(scenes) != 6:
         raise ValueError("Generated JSON must contain exactly 6 scenes")
+    total_words = sum(len(str(scene.get("narration", "")).split()) for scene in scenes)
+    if total_words < 140 or total_words > 190:
+        raise ValueError(f"Generated narration must contain 140-190 words, got {total_words}")
+    for index, scene in enumerate(scenes, start=1):
+        words = len(str(scene.get("narration", "")).split())
+        if words < 20 or words > 40:
+            raise ValueError(f"Scene {index} narration must contain 20-40 words, got {words}")
     required = ("narration", "onscreen_text", "keywords")
     for index, scene in enumerate(scenes, start=1):
         if not isinstance(scene, dict) or any(not str(scene.get(key, "")).strip() for key in required):
@@ -69,8 +76,8 @@ def build_prompt(topic: str) -> str:
 3) تصاعد واضح: Hook ثم حدث ثم أزمة أو مفاجأة ثم نهاية تشجع على الحلقة التالية.
 4) استخدم شخصيات ثابتة وأسماء واضحة وحافظ على استمرارية السلسلة.
 5) العامية المصرية السهلة والمفهومة عربيًا.
-6) إجمالي الكلام MUST be enough for 50 إلى 60 ثانية. استهدف 120 إلى 150 كلمة عربية إجمالًا.
-7) استخدم بالضبط 6 مشاهد قصيرة، وكل مشهد 18 إلى 25 كلمة عربية تقريبًا.
+6) إجمالي الكلام MUST be enough for 50 إلى 60 ثانية. اكتب 140 إلى 190 كلمة عربية إجمالًا.
+7) استخدم بالضبط 6 مشاهد، وكل مشهد 20 إلى 40 كلمة عربية، ولا تختصر الحوار أو السرد.
 8) onscreen_text قصير جدًا وواضح، من 4 إلى 8 كلمات، ليُقرأ على الهاتف والتلفزيون.
 9) لا تستخدم شخصيات عامة أو أغانٍ أو نصوصًا محمية بحقوق نشر.
 10) اختم بتشويق طبيعي للحلقة التالية، بدون طلب مبالغ فيه للاشتراك.
@@ -105,6 +112,7 @@ def repair_json(client: Groq, raw: str) -> dict:
 مهم جدًا: لا تضف أي شرح أو Markdown. لا تغيّر المحتوى إلا لإصلاح JSON.
 يجب أن يحتوي الناتج على: title, description, tags, scenes.
 يجب أن يحتوي scenes على 6 مشاهد بالضبط.
+يجب أن يكون إجمالي narration بين 140 و190 كلمة، وكل مشهد بين 20 و40 كلمة. إذا كان النص قصيرًا، وسّعه بمحتوى قصصي حقيقي بدل تكرار الجمل.
 كل مشهد يجب أن يكون كائنًا مستقلًا ويحتوي بالضبط على: narration, onscreen_text, keywords.
 keywords يجب أن تكون نصًا إنجليزيًا، وليس قائمة.
 لا تترك أي حقل فارغًا.
