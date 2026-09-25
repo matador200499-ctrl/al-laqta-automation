@@ -141,6 +141,14 @@ def make_overlay_png(text: str, out_path: str):
 
 def prepare_scene(i: int, duration: float):
     clip_in = f"clips/scene_{i}.mp4"
+    # تنويع اللقطات مع الحفاظ على نفس الأشخاص: كل مشهد يأخذ قصّة/زوم مختلفة
+    # من نفس الفيديو الأساسي بدل تكرار نفس الكادر حرفيًا.
+    zooms = [1.00, 1.06, 1.12, 1.04, 1.10, 1.02]
+    x_offsets = [0.50, 0.38, 0.62, 0.45, 0.56, 0.32]
+    y_offsets = [0.50, 0.45, 0.55, 0.48, 0.52, 0.44]
+    zoom = zooms[i % len(zooms)]
+    xoff = x_offsets[i % len(x_offsets)]
+    yoff = y_offsets[i % len(y_offsets)]
     overlay_png = f"overlays/scene_{i}.png"
     scene_out = f"segments/scene_{i}.mp4"
 
