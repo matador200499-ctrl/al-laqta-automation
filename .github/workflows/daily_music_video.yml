@@ -9,21 +9,41 @@ jobs:
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
+
+      - name: Check ACE-Step configuration
+        id: check
+        env:
+          ACE_STEP_API_URL: ${{ secrets.ACE_STEP_API_URL }}
+        run: |
+          if [ -z "${ACE_STEP_API_URL}" ]; then
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::ACE-Step is not configured. This optional song workflow will be skipped."
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - uses: actions/setup-python@v5
+        if: steps.check.outputs.configured == 'true'
         with:
           python-version: '3.11'
+
       - name: Install
+        if: steps.check.outputs.configured == 'true'
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends ffmpeg
           pip install requests
+
       - name: Generate song and video
+        if: steps.check.outputs.configured == 'true'
         env:
           ACE_STEP_API_URL: ${{ secrets.ACE_STEP_API_URL }}
           ACE_STEP_API_KEY: ${{ secrets.ACE_STEP_API_KEY }}
           PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
         run: python scripts/generate_music_song.py
+
       - name: Upload to YouTube
+        if: steps.check.outputs.configured == 'true'
         env:
           YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
           YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
