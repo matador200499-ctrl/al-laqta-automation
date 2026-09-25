@@ -39,8 +39,8 @@ def parse_json_response(raw: str) -> dict:
         raise ValueError("Groq response did not contain a JSON object")
     data = json.loads(text[start:end + 1])
     scenes = data.get("scenes")
-    if not isinstance(scenes, list) or len(scenes) < 6 or len(scenes) > 7:
-        raise ValueError("Generated JSON must contain 6 or 7 scenes")
+    if not isinstance(scenes, list) or len(scenes) < 5 or len(scenes) > 8:
+        raise ValueError("Generated JSON must contain 5 to 8 scenes")
     required = ("narration", "onscreen_text", "keywords")
     for index, scene in enumerate(scenes, start=1):
         if not isinstance(scene, dict) or any(not str(scene.get(key, "")).strip() for key in required):
@@ -70,7 +70,7 @@ def build_prompt(topic: str) -> str:
 4) استخدم شخصيات ثابتة وأسماء واضحة وحافظ على استمرارية السلسلة.
 5) العامية المصرية السهلة والمفهومة عربيًا.
 6) إجمالي الكلام MUST be enough for 50 إلى 60 ثانية. استهدف 120 إلى 150 كلمة عربية إجمالًا.
-7) من 6 إلى 7 مشاهد قصيرة، وكل مشهد 18 إلى 25 كلمة عربية تقريبًا.
+7) من 5 إلى 8 مشاهد قصيرة، وكل مشهد 18 إلى 25 كلمة عربية تقريبًا.
 8) onscreen_text قصير جدًا وواضح، من 4 إلى 8 كلمات، ليُقرأ على الهاتف والتلفزيون.
 9) لا تستخدم شخصيات عامة أو أغانٍ أو نصوصًا محمية بحقوق نشر.
 10) اختم بتشويق طبيعي للحلقة التالية، بدون طلب مبالغ فيه للاشتراك.
