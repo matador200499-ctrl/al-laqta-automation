@@ -45,7 +45,7 @@ def main():
             "title": content.get("title", "فيديو جديد - اللقطة"),
             "description": content.get("description", ""),
             "tags": content.get("tags", []),
-            "categoryId": "25",  # News & Politics — عدّلها حسب تصنيف قناتك
+            "categoryId": "24",  # Entertainment — قصص وترفيه
         },
         "status": {
             "privacyStatus": privacy_status,  # private / unlisted / public
