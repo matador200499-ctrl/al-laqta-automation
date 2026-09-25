@@ -53,11 +53,14 @@ def parse_json_response(raw: str) -> dict:
         if not isinstance(scene, dict) or any(not str(scene.get(key, "")).strip() for key in required):
             raise ValueError(f"Scene {index} is missing required fields")
     data["title"] = str(data.get("title") or "حكاية جديدة - اللقطة").strip()
-    if not re.search(r"[\u0600-\u06FF]", data["title"]):
+    if not re.search(r"[\u0600-\u06FF]", data["title"]) or re.search(r"[A-Za-z]", data["title"]):
         data["title"] = "حكاية جديدة من اللقطة"
-    data["description"] = str(data.get("description") or "").strip()
-    tags = data.get("tags", [])
-    data["tags"] = tags if isinstance(tags, list) else []
+    # لا نعتمد على النموذج في الوصف/الوسوم حتى لا تتسرب الإنجليزية إلى يوتيوب.
+    data["description"] = (
+        "حكاية رومانسية درامية من سلسلة اللقطة، مليانة مشاعر ومفاجآت ونهاية تخليك مستني الحلقة الجاية. "
+        "تابع تطور حكاية عمر وليلى في الحلقات القادمة. الحلقة التالية من السلسلة قريبًا."
+    )
+    data["tags"] = ["اللقطة", "قصص", "رومانسية", "دراما", "عمر وليلى", "قصص مصرية", "حكايات"]
     return data
 
 
