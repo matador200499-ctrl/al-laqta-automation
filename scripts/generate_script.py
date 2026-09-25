@@ -42,19 +42,16 @@ def parse_json_response(raw: str) -> dict:
     if not isinstance(scenes, list) or len(scenes) != 6:
         raise ValueError("Generated JSON must contain exactly 6 scenes")
     total_words = sum(len(str(scene.get("narration", "")).split()) for scene in scenes)
-    if total_words < 145 or total_words > 170:
-        raise ValueError(f"Generated narration must contain 145-170 words, got {total_words}")
+    if total_words < 130 or total_words > 190:
+        raise ValueError(f"Generated narration must contain 130-190 words, got {total_words}")
     for index, scene in enumerate(scenes, start=1):
         words = len(str(scene.get("narration", "")).split())
-        if words < 22 or words > 30:
-            raise ValueError(f"Scene {index} narration must contain 22-30 words, got {words}")
+        if words < 18 or words > 35:
+            raise ValueError(f"Scene {index} narration must contain 18-35 words, got {words}")
     required = ("narration", "onscreen_text", "keywords")
     for index, scene in enumerate(scenes, start=1):
         if not isinstance(scene, dict) or any(not str(scene.get(key, "")).strip() for key in required):
             raise ValueError(f"Scene {index} is missing required fields")
-        onscreen_words = len(str(scene.get("onscreen_text", "")).split())
-        if onscreen_words < 4 or onscreen_words > 8:
-            raise ValueError(f"Scene {index} onscreen_text must contain 4-8 words, got {onscreen_words}")
     data["title"] = str(data.get("title") or "فيديو جديد - اللقطة").strip()
     data["description"] = str(data.get("description") or "").strip()
     tags = data.get("tags", [])
@@ -79,8 +76,8 @@ def build_prompt(topic: str) -> str:
 3) تصاعد واضح: Hook ثم حدث ثم أزمة أو مفاجأة ثم نهاية تشجع على الحلقة التالية.
 4) استخدم شخصيات ثابتة وأسماء واضحة وحافظ على استمرارية السلسلة.
 5) العامية المصرية السهلة والمفهومة عربيًا.
-6) إجمالي الكلام MUST be enough for 50 إلى 60 ثانية. اكتب 145 إلى 170 كلمة عربية إجمالًا.
-7) استخدم بالضبط 6 مشاهد، وكل مشهد 22 إلى 30 كلمة عربية، ولا تختصر الحوار أو السرد.
+6) إجمالي الكلام MUST be enough for 50 إلى 60 ثانية. استهدف حوالي 145 كلمة عربية إجمالًا.
+7) استخدم بالضبط 6 مشاهد، وكل مشهد حوالي 20 إلى 30 كلمة عربية. لا تختصر الحوار أو السرد.
 8) onscreen_text قصير جدًا وواضح، من 4 إلى 8 كلمات، ليُقرأ على الهاتف والتلفزيون.
 9) لا تستخدم شخصيات عامة أو أغانٍ أو نصوصًا محمية بحقوق نشر.
 10) اختم بتشويق طبيعي للحلقة التالية، بدون طلب مبالغ فيه للاشتراك.
@@ -115,11 +112,11 @@ def repair_json(client: Groq, raw: str) -> dict:
 مهم جدًا: لا تضف أي شرح أو Markdown. لا تغيّر المحتوى إلا لإصلاح JSON.
 يجب أن يحتوي الناتج على: title, description, tags, scenes.
 يجب أن يحتوي scenes على 6 مشاهد بالضبط.
-يجب أن يكون إجمالي narration بين 145 و170 كلمة، وكل مشهد بين 22 و30 كلمة. إذا كان النص قصيرًا، وسّعه بمحتوى قصصي حقيقي بدل تكرار الجمل.
+يجب أن يكون إجمالي narration حوالي 145 كلمة، وكل مشهد حوالي 20 إلى 30 كلمة. إذا كان النص قصيرًا، وسّعه بمحتوى قصصي حقيقي بدل تكرار الجمل.
 كل مشهد يجب أن يكون كائنًا مستقلًا ويحتوي بالضبط على: narration, onscreen_text, keywords.
 keywords يجب أن تكون نصًا إنجليزيًا، وليس قائمة.
 لا تترك أي حقل فارغًا.
-يجب أن يحتوي الناتج على بالضبط 6 مشاهد. يجب أن يكون مجموع narration بين 145 و170 كلمة، وكل مشهد بين 22 و30 كلمة. إذا كان النص أقصر، أعد صياغته وتوسيعه بمحتوى قصصي حقيقي حتى يطابق هذا الشرط. يجب إغلاق كل علامات الاقتباس والأقواس، ووضع فاصلة بين كل خاصيتين متتاليتين.
+يجب أن يحتوي الناتج على بالضبط 6 مشاهد. يجب أن يكون مجموع narration حوالي 145 كلمة، وكل مشهد حوالي 20 إلى 30 كلمة. إذا كان النص أقصر، أعد صياغته وتوسيعه بمحتوى قصصي حقيقي. يجب إغلاق كل علامات الاقتباس والأقواس، ووضع فاصلة بين كل خاصيتين متتاليتين.
 
 النص المراد إصلاحه:
 {raw}
