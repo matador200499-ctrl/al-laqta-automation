@@ -63,14 +63,11 @@ def load_font(size: int):
 
 
 def rtl_text(text: str):
-    """استخدم محرك RAQM الحديث، مع حل بديل للإصدارات التي لا تدعمه."""
+    """تشكيل عربي ثابت بدون الاعتماد على RAQM، لمنع ظهور الحروف كمربعات."""
     cleaned = re.sub(r"\s+", " ", str(text)).strip()
-    try:
-        if ImageFont.core.HAVE_RAQM:
-            return cleaned, {"direction": "rtl", "language": "ar"}
-    except (AttributeError, TypeError):
-        pass
-    return get_display(arabic_reshaper.reshape(cleaned)), {}
+    # تشكيل الحروف العربية ثم عكس ترتيب العرض بصريًا.
+    shaped = arabic_reshaper.reshape(cleaned)
+    return get_display(shaped), {}
 
 
 def wrap_arabic(draw, text: str, font, max_width: int):
