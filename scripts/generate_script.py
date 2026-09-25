@@ -5,7 +5,7 @@ import re
 from groq import Groq
 
 
-MODEL = os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile")
+MODEL = os.environ.get("GROQ_MODEL", "openai/gpt-oss-120b")
 DEFAULT_TOPIC = "سلسلة: عمر وليلى | الحلقة 1 | لقاء غير متوقع يغير كل شيء"
 
 
