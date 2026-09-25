@@ -1,44 +1,46 @@
 """
 fetch_clips.py
-يجلب مقطع فيديو ستوك مجاني (بدون حقوق) من Pexels لكل مشهد في script.json،
-بناءً على كلمات البحث (keywords) اللي ولّدها Claude لكل مشهد.
-
-يحتاج PEXELS_API_KEY (مجاني - تسجيل في https://www.pexels.com/api/).
-النتيجة: clips/scene_0.mp4, clips/scene_1.mp4, ...
+يجلب مقطعًا واحدًا لزوجين متناسقين من Pexels ثم يعيد استخدامه
+في كل مشاهد الحلقة، حتى لا تتغير الشخصيات بين المشاهد.
 """
 
 import json
 import os
+import shutil
 import sys
+
 import requests
 
 PEXELS_API_KEY = os.environ.get("PEXELS_API_KEY")
 SEARCH_URL = "https://api.pexels.com/videos/search"
 
+# نبحث عن زوجين في لقطة واحدة ثم نستخدم نفس الفيديو في كل المشاهد.
+# ده لا يضمن شخصيات بعينها من Pexels، لكنه يضمن أن كل مشاهد الحلقة
+# تستخدم نفس الأشخاص فعليًا بدل اختيار أشخاص مختلفين لكل مشهد.
+CHARACTER_QUERY = "young Arab couple romantic walking together"
 
 def find_best_video_file(video: dict) -> str | None:
-    """يختار أفضل جودة متاحة بدقة HD تقريبًا (1280x720 أو أعلى) لتقليل حجم التحميل."""
     files = sorted(
-        [f for f in video["video_files"] if f.get("width") and f["width"] >= 1280],
+        [f for f in video.get("video_files", []) if f.get("width") and f["width"] >= 1280],
         key=lambda f: f["width"],
     )
     if files:
         return files[0]["link"]
-    # fallback لأي جودة متاحة لو مفيش HD
-    if video["video_files"]:
-        return video["video_files"][0]["link"]
-    return None
+    files = video.get("video_files", [])
+    return files[0]["link"] if files else None
 
 
-CHARACTER_ANCHOR = "same young Arab couple, man with short dark hair in black jacket, woman with long dark hair in beige coat"
-
-def search_clip(keywords: str) -> str | None:
+def search_clip(query: str) -> str | None:
     headers = {"Authorization": PEXELS_API_KEY}
-    params = {"query": keywords, "orientation": "landscape", "size": "medium", "per_page": 5}
+    params = {
+        "query": query,
+        "orientation": "landscape",
+        "size": "medium",
+        "per_page": 10,
+    }
     resp = requests.get(SEARCH_URL, headers=headers, params=params, timeout=30)
     resp.raise_for_status()
-    data = resp.json()
-    videos = data.get("videos", [])
+    videos = resp.json().get("videos", [])
     if not videos:
         return None
     return find_best_video_file(videos[0])
@@ -62,24 +64,26 @@ def main():
 
     os.makedirs("clips", exist_ok=True)
 
-    for i, scene in enumerate(script["scenes"]):
-        keywords = f"{CHARACTER_ANCHOR}, {scene['keywords']}"
+    base_clip = "clips/character_base.mp4"
+    print(f"جاري اختيار فيديو أساسي ثابت للشخصيات: {CHARACTER_QUERY}")
+
+    url = search_clip(CHARACTER_QUERY)
+    if not url:
+        print("لم توجد نتيجة للبحث الأساسي، جاري تجربة بحث أوسع...")
+        url = search_clip("young couple romantic") or search_clip("romantic couple")
+
+    if not url:
+        print("خطأ: تعذر إيجاد فيديو أساسي للشخصيات", file=sys.stderr)
+        sys.exit(1)
+
+    download(url, base_clip)
+    print(f"تم تحميل الفيديو الأساسي: {base_clip}")
+
+    # نفس الملف بالضبط لكل مشهد = نفس الشخصيات في الحلقة كلها.
+    for i, _scene in enumerate(script["scenes"]):
         out_path = f"clips/scene_{i}.mp4"
-        print(f"جاري البحث عن مقطع للمشهد {i + 1}: \"{keywords}\"...")
-
-        url = search_clip(keywords)
-        if not url:
-            # لو مفيش نتيجة، جرّب كلمة بحث عامة أوسع كبديل
-            print(f"  لا توجد نتائج لـ \"{keywords}\"، جاري المحاولة بكلمة أعم...")
-            fallback_keyword = keywords.split()[0] if keywords.split() else "abstract background"
-            url = search_clip(fallback_keyword) or search_clip("abstract background")
-
-        if not url:
-            print(f"  تحذير: تعذر إيجاد مقطع للمشهد {i + 1}، هيتم تخطيه", file=sys.stderr)
-            continue
-
-        download(url, out_path)
-        print(f"  تم التحميل: {out_path}")
+        shutil.copyfile(base_clip, out_path)
+        print(f"تم تثبيت نفس الشخصيات في المشهد {i + 1}: {out_path}")
 
 
 if __name__ == "__main__":
