@@ -17,7 +17,11 @@ SEARCH_URL = "https://api.pexels.com/videos/search"
 # نبحث عن زوجين في لقطة واحدة ثم نستخدم نفس الفيديو في كل المشاهد.
 # ده لا يضمن شخصيات بعينها من Pexels، لكنه يضمن أن كل مشاهد الحلقة
 # تستخدم نفس الأشخاص فعليًا بدل اختيار أشخاص مختلفين لكل مشهد.
-CHARACTER_QUERY = "young Arab couple romantic walking together"
+CHARACTER_QUERIES = [
+    "young Arab Middle Eastern couple front view faces visible romantic",
+    "young Middle Eastern man woman talking face visible romantic",
+    "young Arab couple close up faces visible cinematic"
+]
 
 def find_best_video_file(video: dict) -> str | None:
     files = sorted(
@@ -43,7 +47,15 @@ def search_clip(query: str) -> str | None:
     videos = resp.json().get("videos", [])
     if not videos:
         return None
-    return find_best_video_file(videos[0])
+    ranked = sorted(
+        videos,
+        key=lambda v: (
+            int(v.get("duration", 0) or 0),
+            max([int(f.get("width", 0) or 0) for f in v.get("video_files", [])] or [0]),
+        ),
+        reverse=True,
+    )
+    return find_best_video_file(ranked[0])
 
 
 def download(url: str, out_path: str):
@@ -65,9 +77,13 @@ def main():
     os.makedirs("clips", exist_ok=True)
 
     base_clip = "clips/character_base.mp4"
-    print(f"جاري اختيار فيديو أساسي ثابت للشخصيات: {CHARACTER_QUERY}")
-
-    url = search_clip(CHARACTER_QUERY)
+    print("جاري اختيار فيديو أساسي ثابت بوجوه واضحة من الأمام...")
+    url = None
+    for query in CHARACTER_QUERIES:
+        print(f"بحث Pexels: {query}")
+        url = search_clip(query)
+        if url:
+            break
     if not url:
         print("لم توجد نتيجة للبحث الأساسي، جاري تجربة بحث أوسع...")
         url = search_clip("young couple romantic") or search_clip("romantic couple")
