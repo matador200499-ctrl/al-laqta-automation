@@ -30,6 +30,8 @@ def find_best_video_file(video: dict) -> str | None:
     return None
 
 
+CHARACTER_ANCHOR = "same young Arab couple, man with short dark hair in black jacket, woman with long dark hair in beige coat"
+
 def search_clip(keywords: str) -> str | None:
     headers = {"Authorization": PEXELS_API_KEY}
     params = {"query": keywords, "orientation": "landscape", "size": "medium", "per_page": 5}
@@ -61,7 +63,7 @@ def main():
     os.makedirs("clips", exist_ok=True)
 
     for i, scene in enumerate(script["scenes"]):
-        keywords = scene["keywords"]
+        keywords = f"{CHARACTER_ANCHOR}, {scene['keywords']}"
         out_path = f"clips/scene_{i}.mp4"
         print(f"جاري البحث عن مقطع للمشهد {i + 1}: \"{keywords}\"...")
 
