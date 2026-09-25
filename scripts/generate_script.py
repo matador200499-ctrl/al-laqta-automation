@@ -5,7 +5,7 @@ import re
 from groq import Groq
 
 
-MODEL = os.environ.get("GROQ_MODEL", "openai/gpt-oss-120b")
+MODEL = os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile")
 DEFAULT_TOPIC = "سلسلة: عمر وليلى | الحلقة 1 | لقاء غير متوقع يغير كل شيء"
 
 
@@ -104,7 +104,10 @@ def repair_json(client: Groq, raw: str) -> dict:
 أصلح النص التالي وأعده كـ JSON صحيح نحويًا فقط.
 مهم جدًا: لا تضف أي شرح أو Markdown. لا تغيّر المحتوى إلا لإصلاح JSON.
 يجب أن يحتوي الناتج على: title, description, tags, scenes.
-وكل scene يجب أن يحتوي على: narration, onscreen_text, keywords.
+يجب أن يحتوي scenes على 6 مشاهد بالضبط.
+كل مشهد يجب أن يكون كائنًا مستقلًا ويحتوي بالضبط على: narration, onscreen_text, keywords.
+keywords يجب أن تكون نصًا إنجليزيًا، وليس قائمة.
+لا تترك أي حقل فارغًا.
 يجب أن يحتوي الناتج على بالضبط 6 مشاهد. يجب إغلاق كل علامات الاقتباس والأقواس، ووضع فاصلة بين كل خاصيتين متتاليتين.
 
 النص المراد إصلاحه:
