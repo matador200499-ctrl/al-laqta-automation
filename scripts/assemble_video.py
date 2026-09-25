@@ -166,8 +166,9 @@ def prepare_scene(i: int, duration: float):
         "-stream_loop", "-1", "-i", clip_in,
         "-i", overlay_png,
         "-filter_complex",
-        f"[0:v]scale={WIDTH}:{HEIGHT}:force_original_aspect_ratio=increase,"
-        f"crop={WIDTH}:{HEIGHT},setsar=1[bg];[bg][1:v]overlay=0:0[outv]",
+        f"[0:v]scale=ceil(iw*{zoom}/2)*2:ceil(ih*{zoom}/2)*2,"
+        f"crop={WIDTH}:{HEIGHT}:max(0,(iw-{WIDTH})*{xoff}):max(0,(ih-{HEIGHT})*{yoff}),"
+        f"setsar=1[bg];[bg][1:v]overlay=0:0[outv]",
         "-map", "[outv]", "-t", str(duration),
         "-an", "-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
         scene_out,
