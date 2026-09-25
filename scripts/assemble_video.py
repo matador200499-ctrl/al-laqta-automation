@@ -20,7 +20,7 @@ import arabic_reshaper
 from bidi.algorithm import get_display
 from PIL import Image, ImageDraw, ImageFont
 
-WIDTH, HEIGHT = 1920, 1080
+WIDTH, HEIGHT = 1080, 1920
 FONT_PATH = os.environ.get("ARABIC_FONT_PATH", "/usr/share/fonts/truetype/noto/NotoNaskhArabic-Regular.ttf")
 FONT_CANDIDATES = (
     FONT_PATH,
