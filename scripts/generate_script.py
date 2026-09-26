@@ -108,7 +108,6 @@ def request_generation(client: Groq, prompt: str):
         messages=[{"role": "user", "content": prompt}],
         temperature=0.4,
         max_tokens=3000,
-        response_format={"type": "json_object"},
     )
 
 
