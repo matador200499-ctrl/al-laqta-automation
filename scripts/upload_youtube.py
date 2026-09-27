@@ -69,10 +69,42 @@ def main():
             print(f"تقدّم الرفع: {int(status.progress() * 100)}%")
 
     video_id = response.get("id")
+    response_snippet = response.get("snippet", {})
+    response_status = response.get("status", {})
+
+    channel_id = response_snippet.get("channelId", "غير متاح")
+    channel_title = response_snippet.get("channelTitle", "غير متاح")
+    actual_privacy = response_status.get("privacyStatus", "غير متاح")
+    upload_status = response_status.get("uploadStatus", "غير متاح")
+    rejection_reason = response_status.get("rejectionReason")
+    failure_reason = response_status.get("failureReason")
+
     print(f"تم الرفع بنجاح! رابط الفيديو: https://youtu.be/{video_id}")
+    print(f"قناة الرفع الفعلية: {channel_title}")
+    print(f"Channel ID: {channel_id}")
+    print(f"حالة الرفع: {upload_status}")
+    print(f"الخصوصية الفعلية: {actual_privacy}")
+    if rejection_reason:
+        print(f"سبب الرفض: {rejection_reason}")
+    if failure_reason:
+        print(f"سبب الفشل: {failure_reason}")
 
     with open("upload_result.json", "w", encoding="utf-8") as f:
-        json.dump({"video_id": video_id, "url": f"https://youtu.be/{video_id}"}, f, ensure_ascii=False, indent=2)
+        json.dump(
+            {
+                "video_id": video_id,
+                "url": f"https://youtu.be/{video_id}",
+                "channel_id": channel_id,
+                "channel_title": channel_title,
+                "privacy_status": actual_privacy,
+                "upload_status": upload_status,
+                "rejection_reason": rejection_reason,
+                "failure_reason": failure_reason,
+            },
+            f,
+            ensure_ascii=False,
+            indent=2,
+        )
 
 
 if __name__ == "__main__":
