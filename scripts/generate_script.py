@@ -197,7 +197,8 @@ def main():
     is_story = topic.strip().startswith("سلسلة:")
     data = generate_with_retry(client, build_prompt(topic), is_story)
 
-    content_type = "story" if topic.strip().startswith("سلسلة:") else "knowledge"\n    script = {"topic": topic, "content_type": content_type, "scenes": data["scenes"]}
+    content_type = "story" if topic.strip().startswith("سلسلة:") else "knowledge"
+    script = {"topic": topic, "content_type": content_type, "scenes": data["scenes"]}
     content = {"title": data["title"], "description": data["description"], "tags": data["tags"]}
 
     os.makedirs("output", exist_ok=True)
