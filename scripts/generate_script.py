@@ -162,7 +162,7 @@ def repair_json(client: Groq, raw: str, is_story: bool) -> dict:
         model=MODEL,
         messages=[{"role": "user", "content": repair_prompt}],
         temperature=0.0,
-        max_tokens=5000,
+        max_tokens=10000,
         response_format={"type": "json_object"},
     )
     return parse_json_response(repaired.choices[0].message.content or "", is_story)
