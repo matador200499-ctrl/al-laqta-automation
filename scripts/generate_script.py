@@ -29,41 +29,46 @@ def parse_episode(topic: str):
         return {"series": "قصة لم تنتهِ", "episode": 1, "plot": topic.strip()}
     return {"series": match.group(1).strip(), "episode": int(match.group(2)), "plot": match.group(3).strip()}
 
-def parse_json_response(raw: str) -> dict:
+def parse_json_response(raw: str, is_story: bool) -> dict:
     text = raw.strip()
-    text = re.sub(r"^```(?:json)?\s*", "", text, flags=re.IGNORECASE)
-    text = re.sub(r"\s*```$", "", text)
+    text = re.sub(r"^```(?:json)?\\s*", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"\\s*```$", "", text)
     start = text.find("{")
     end = text.rfind("}")
     if start == -1 or end == -1 or end <= start:
         raise ValueError("Groq response did not contain a JSON object")
     data = json.loads(text[start:end + 1])
     scenes = data.get("scenes")
-    if not isinstance(scenes, list) or len(scenes) != 6:
-        raise ValueError("Generated JSON must contain exactly 6 scenes")
+    expected_scenes = 6 if is_story else 9
+    if not isinstance(scenes, list) or len(scenes) != expected_scenes:
+        raise ValueError(f"Generated JSON must contain exactly {expected_scenes} scenes")
     total_words = sum(len(str(scene.get("narration", "")).split()) for scene in scenes)
-    if total_words < 130 or total_words > 190:
-        raise ValueError(f"Generated narration must contain 130-190 words, got {total_words}")
+    if is_story:
+        if total_words < 130 or total_words > 190:
+            raise ValueError(f"Story narration must contain 130-190 words, got {total_words}")
+        min_scene_words, max_scene_words = 18, 35
+    else:
+        if total_words < 420 or total_words > 480:
+            raise ValueError(f"Knowledge narration must contain 420-480 words for about 3 minutes, got {total_words}")
+        min_scene_words, max_scene_words = 40, 60
     for index, scene in enumerate(scenes, start=1):
         words = len(str(scene.get("narration", "")).split())
-        if words < 18 or words > 35:
-            raise ValueError(f"Scene {index} narration must contain 18-35 words, got {words}")
+        if words < min_scene_words or words > max_scene_words:
+            raise ValueError(f"Scene {index} narration must contain {min_scene_words}-{max_scene_words} words, got {words}")
     required = ("narration", "onscreen_text", "keywords")
     for index, scene in enumerate(scenes, start=1):
         if not isinstance(scene, dict) or any(not str(scene.get(key, "")).strip() for key in required):
             raise ValueError(f"Scene {index} is missing required fields")
-    data["title"] = str(data.get("title") or "حكاية جديدة - اللقطة").strip()
+    data["title"] = str(data.get("title") or "فيديو جديد - اللقطة").strip()
     if not re.search(r"[\u0600-\u06FF]", data["title"]) or re.search(r"[A-Za-z]", data["title"]):
-        data["title"] = "حكاية جديدة من اللقطة"
-    # لا نعتمد على النموذج في الوصف/الوسوم حتى لا تتسرب الإنجليزية إلى يوتيوب.
-    data["description"] = (
-        "حكاية رومانسية درامية من سلسلة اللقطة، مليانة مشاعر ومفاجآت ونهاية تخليك مستني الحلقة الجاية. "
-        "تابع تطور حكاية عمر وليلى في الحلقات القادمة. الحلقة التالية من السلسلة قريبًا."
-    )
-    data["tags"] = ["اللقطة", "قصص", "رومانسية", "دراما", "عمر وليلى", "قصص مصرية", "حكايات"]
+        data["title"] = "حلقة جديدة من اللقطة"
+    if is_story:
+        data["description"] = "حكاية رومانسية درامية من سلسلة اللقطة، مليانة مشاعر ومفاجآت وتشويق. تابع تطور الأحداث في الحلقات القادمة. الحلقة التالية من السلسلة قريبًا."
+        data["tags"] = ["اللقطة", "قصص", "رومانسية", "دراما", "حكايات", "قصص مصرية"]
+    else:
+        data["description"] = "فيديو معلوماتي من قناة اللقطة يشرح موضوع الحلقة بطريقة بسيطة ومشوقة، مع أهم الحقائق والتفاصيل التي تساعدك تفهم الموضوع في حوالي 3 دقائق."
+        data["tags"] = ["اللقطة", "علوم", "معلومات", "حقائق", "تاريخ", "فضاء", "تكنولوجيا"]
     return data
-
-
 def build_prompt(topic: str) -> str:
     info = parse_episode(topic)
     is_story = topic.strip().startswith("سلسلة:")
@@ -107,8 +112,8 @@ narration, onscreen_text, keywords
 القواعد:
 1) ابدأ بمعلومة صادمة أو سؤال قوي خلال أول ثانيتين.
 2) اشرح الموضوع بطريقة بسيطة ومشوقة وبالعامية المصرية.
-3) بالضبط 6 مشاهد، وإجمالي narration من 130 إلى 190 كلمة.
-4) كل مشهد يضيف معلومة جديدة، ولا تكرر نفس الفكرة.
+3) بالضبط 9 مشاهد، وإجمالي narration من 420 إلى 480 كلمة ليكون الفيديو حوالي 3 دقائق.
+4) كل مشهد حوالي 40 إلى 60 كلمة، ويضيف معلومة جديدة أو يطوّر الشرح بدون تكرار.
 5) onscreen_text عربي فقط، من 4 إلى 8 كلمات.
 6) keywords إنجليزية من 4 إلى 7 كلمات تصف الشيء/المكان/الفعل الخاص بالمشهد، بدون أسماء شخصيات أو أوصاف رومانسية.
 7) أعد JSON صحيح فقط بدون Markdown.
@@ -132,46 +137,50 @@ def request_generation(client: Groq, prompt: str):
     )
 
 
-def repair_json(client: Groq, raw: str) -> dict:
-    repair_prompt = f"""
-أصلح النص التالي وأعده كـ JSON صحيح نحويًا فقط.
-مهم جدًا: لا تضف أي شرح أو Markdown. لا تغيّر المحتوى إلا لإصلاح JSON.
-يجب أن يحتوي الناتج على: title, description, tags, scenes.
-يجب أن يحتوي scenes على 6 مشاهد بالضبط.
-يجب أن يكون إجمالي narration حوالي 145 كلمة، وكل مشهد حوالي 20 إلى 30 كلمة. إذا كان النص قصيرًا، وسّعه بمحتوى قصصي حقيقي بدل تكرار الجمل.
-كل مشهد يجب أن يكون كائنًا مستقلًا ويحتوي بالضبط على: narration, onscreen_text, keywords.
-keywords يجب أن تكون نصًا إنجليزيًا، وليس قائمة.
-لا تترك أي حقل فارغًا.
-يجب أن يحتوي الناتج على بالضبط 6 مشاهد. يجب أن يكون مجموع narration حوالي 145 كلمة، وكل مشهد حوالي 20 إلى 30 كلمة. إذا كان النص أقصر، أعد صياغته وتوسيعه بمحتوى قصصي حقيقي. يجب إغلاق كل علامات الاقتباس والأقواس، ووضع فاصلة بين كل خاصيتين متتاليتين.
-
-النص المراد إصلاحه:
-{raw}
-""".strip()
+def repair_json(client: Groq, raw: str, is_story: bool) -> dict:
+    target = (
+        "يجب أن يحتوي scenes على 6 مشاهد بالضبط.\n"
+        "إجمالي narration من 130 إلى 190 كلمة، وكل مشهد من 18 إلى 35 كلمة."
+        if is_story
+        else
+        "يجب أن يحتوي scenes على 9 مشاهد بالضبط.\n"
+        "إجمالي narration من 420 إلى 480 كلمة ليكون الفيديو حوالي 3 دقائق.\n"
+        "كل مشهد من 40 إلى 60 كلمة، ويجب أن يضيف معلومة أو يطوّر الشرح بدون تكرار."
+    )
+    repair_prompt = (
+        "أصلح النص التالي وأعده كـ JSON صحيح نحويًا فقط.\n"
+        "مهم جدًا: لا تضف أي شرح أو Markdown. لا تغيّر الفكرة الأساسية إلا عند الحاجة لاستكمال الشروط.\n"
+        "يجب أن يحتوي الناتج على: title, description, tags, scenes.\n"
+        + target + "\n"
+        + "كل مشهد يجب أن يكون كائنًا مستقلًا ويحتوي بالضبط على: narration, onscreen_text, keywords.\n"
+        + "keywords يجب أن تكون نصًا إنجليزيًا، وليس قائمة.\n"
+        + "لا تترك أي حقل فارغًا.\n"
+        + "النص المراد إصلاحه:\n"
+        + raw
+    )
     repaired = client.chat.completions.create(
         model=MODEL,
         messages=[{"role": "user", "content": repair_prompt}],
         temperature=0.0,
-        max_tokens=3000,
+        max_tokens=5000,
         response_format={"type": "json_object"},
     )
-    return parse_json_response(repaired.choices[0].message.content or "")
-
-
-def generate_with_retry(client: Groq, prompt: str) -> dict:
+    return parse_json_response(repaired.choices[0].message.content or "", is_story)
+def generate_with_retry(client: Groq, prompt: str, is_story: bool) -> dict:
     last_error = None
     raw = ""
     for attempt in range(2):
         try:
             completion = request_generation(client, prompt)
             raw = completion.choices[0].message.content or ""
-            return parse_json_response(raw)
+            return parse_json_response(raw, is_story)
         except Exception as error:
             last_error = error
             print(f"Generation attempt {attempt + 1} returned invalid JSON: {error}")
     for attempt in range(2):
         try:
             print(f"Sending JSON repair request ({attempt + 1}/2)...")
-            return repair_json(client, raw)
+            return repair_json(client, raw, is_story)
         except Exception as error:
             last_error = error
             print(f"Repair attempt {attempt + 1} failed: {error}")
@@ -185,7 +194,8 @@ def main():
     topic = get_topic()
     print(f"Generating for topic: {topic} with model {MODEL}")
     client = Groq(api_key=api_key)
-    data = generate_with_retry(client, build_prompt(topic))
+    is_story = topic.strip().startswith("سلسلة:")
+    data = generate_with_retry(client, build_prompt(topic), is_story)
 
     content_type = "story" if topic.strip().startswith("سلسلة:") else "knowledge"\n    script = {"topic": topic, "content_type": content_type, "scenes": data["scenes"]}
     content = {"title": data["title"], "description": data["description"], "tags": data["tags"]}
