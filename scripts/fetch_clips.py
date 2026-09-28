@@ -23,6 +23,15 @@ CHARACTER_QUERIES = [
     "young Arab couple close up faces visible cinematic"
 ]
 
+def is_story(script: dict) -> bool:
+    return script.get("content_type") == "story" or str(script.get("topic", "")).strip().startswith("سلسلة:")
+
+def scene_query(scene: dict) -> str:
+    keywords = scene.get("keywords", "")
+    if isinstance(keywords, list):
+        keywords = " ".join(str(x) for x in keywords)
+    return str(keywords).strip() or "cinematic documentary footage"
+
 def find_best_video_file(video: dict) -> str | None:
     files = sorted(
         [f for f in video.get("video_files", []) if f.get("width") and f["width"] >= 1280],
@@ -76,31 +85,38 @@ def main():
 
     os.makedirs("clips", exist_ok=True)
 
-    base_clip = "clips/character_base.mp4"
-    print("جاري اختيار فيديو أساسي ثابت بوجوه واضحة من الأمام...")
-    url = None
-    for query in CHARACTER_QUERIES:
-        print(f"بحث Pexels: {query}")
-        url = search_clip(query)
-        if url:
-            break
-    if not url:
-        print("لم توجد نتيجة للبحث الأساسي، جاري تجربة بحث أوسع...")
-        url = search_clip("young couple romantic") or search_clip("romantic couple")
+    if is_story(script):
+        base_clip = "clips/character_base.mp4"
+        print("نوع المحتوى: قصة — تثبيت نفس الشخصيات في كل المشاهد...")
+        url = None
+        for query in CHARACTER_QUERIES:
+            print(f"بحث Pexels: {query}")
+            url = search_clip(query)
+            if url:
+                break
+        if not url:
+            url = search_clip("young couple romantic") or search_clip("romantic couple")
+        if not url:
+            print("خطأ: تعذر إيجاد فيديو أساسي للشخصيات", file=sys.stderr)
+            sys.exit(1)
 
-    if not url:
-        print("خطأ: تعذر إيجاد فيديو أساسي للشخصيات", file=sys.stderr)
-        sys.exit(1)
-
-    download(url, base_clip)
-    print(f"تم تحميل الفيديو الأساسي: {base_clip}")
-
-    # نفس الملف بالضبط لكل مشهد = نفس الشخصيات في الحلقة كلها.
-    for i, _scene in enumerate(script["scenes"]):
-        out_path = f"clips/scene_{i}.mp4"
-        shutil.copyfile(base_clip, out_path)
-        print(f"تم تثبيت نفس الشخصيات في المشهد {i + 1}: {out_path}")
-
+        download(url, base_clip)
+        for i, _scene in enumerate(script["scenes"]):
+            shutil.copyfile(base_clip, f"clips/scene_{i}.mp4")
+            print(f"تم تثبيت نفس الشخصيات في المشهد {i + 1}")
+    else:
+        print("نوع المحتوى: معلوماتي — كل مشهد سيأخذ لقطة مناسبة لموضوعه.")
+        for i, scene in enumerate(script["scenes"]):
+            query = scene_query(scene)
+            print(f"بحث Pexels للمشهد {i + 1}: {query}")
+            url = search_clip(query)
+            if not url:
+                url = search_clip("documentary science technology") or search_clip("nature science")
+            if not url:
+                print(f"خطأ: تعذر إيجاد مقطع للمشهد {i + 1}", file=sys.stderr)
+                sys.exit(1)
+            download(url, f"clips/scene_{i}.mp4")
+            print(f"تم تحميل مقطع المشهد {i + 1}")
 
 if __name__ == "__main__":
     main()
