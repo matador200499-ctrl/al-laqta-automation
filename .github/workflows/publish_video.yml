@@ -7,6 +7,12 @@ on:
     - cron: "0 0,3,6,9,12,15,18,21 * * *"
   workflow_dispatch:
 
+# يمنع تشغيل نسختين من النشر في نفس الوقت،
+# وبالتالي لا يمكن لتشغيلين قراءة نفس topics.txt وإنتاج نفس الفيديو.
+concurrency:
+  group: publish-video
+  cancel-in-progress: false
+
 permissions:
   contents: write
 
