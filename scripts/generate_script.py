@@ -31,8 +31,8 @@ def parse_episode(topic: str):
 
 def parse_json_response(raw: str, is_story: bool) -> dict:
     text = raw.strip()
-    text = re.sub(r"^```(?:json)?\\s*", "", text, flags=re.IGNORECASE)
-    text = re.sub(r"\\s*```$", "", text)
+    text = re.sub(r"^```(?:json)?\s*", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"\s*```$", "", text)
     start = text.find("{")
     end = text.rfind("}")
     if start == -1 or end == -1 or end <= start:
@@ -132,7 +132,7 @@ def request_generation(client: Groq, prompt: str):
         model=MODEL,
         messages=[{"role": "user", "content": prompt}],
         temperature=0.4,
-        max_tokens=3000,
+        max_tokens=5000,
         response_format={"type": "json_object"},
     )
 
