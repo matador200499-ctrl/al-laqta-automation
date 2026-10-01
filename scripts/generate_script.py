@@ -48,9 +48,9 @@ def parse_json_response(raw: str, is_story: bool) -> dict:
             raise ValueError(f"Story narration must contain 130-190 words, got {total_words}")
         min_scene_words, max_scene_words = 18, 35
     else:
-        if total_words < 420 or total_words > 480:
-            raise ValueError(f"Knowledge narration must contain 420-480 words for about 3 minutes, got {total_words}")
-        min_scene_words, max_scene_words = 40, 60
+        if total_words < 335 or total_words > 365:
+            raise ValueError(f"Knowledge narration must contain 335-365 words for about 3 minutes, got {total_words}")
+        min_scene_words, max_scene_words = 35, 45
     for index, scene in enumerate(scenes, start=1):
         words = len(str(scene.get("narration", "")).split())
         if words < min_scene_words or words > max_scene_words:
@@ -112,8 +112,8 @@ narration, onscreen_text, keywords
 القواعد:
 1) ابدأ بمعلومة صادمة أو سؤال قوي خلال أول ثانيتين.
 2) اشرح الموضوع بطريقة بسيطة ومشوقة وبالعامية المصرية.
-3) بالضبط 9 مشاهد، وإجمالي narration من 420 إلى 480 كلمة ليكون الفيديو حوالي 3 دقائق.
-4) كل مشهد حوالي 40 إلى 60 كلمة، ويضيف معلومة جديدة أو يطوّر الشرح بدون تكرار.
+3) بالضبط 9 مشاهد، وإجمالي narration من 335 إلى 365 كلمة ليكون الفيديو حوالي 3 دقائق.
+4) كل مشهد حوالي 35 إلى 45 كلمة، ويضيف معلومة جديدة أو يطوّر الشرح بدون تكرار.
 5) onscreen_text عربي فقط، من 4 إلى 8 كلمات.
 6) keywords إنجليزية من 4 إلى 7 كلمات تصف الشيء/المكان/الفعل الخاص بالمشهد، بدون أسماء شخصيات أو أوصاف رومانسية.
 7) أعد JSON صحيح فقط بدون Markdown.
@@ -144,8 +144,8 @@ def repair_json(client: Groq, raw: str, is_story: bool) -> dict:
         if is_story
         else
         "يجب أن يحتوي scenes على 9 مشاهد بالضبط.\n"
-        "إجمالي narration من 420 إلى 480 كلمة ليكون الفيديو حوالي 3 دقائق.\n"
-        "كل مشهد من 40 إلى 60 كلمة، ويجب أن يضيف معلومة أو يطوّر الشرح بدون تكرار."
+        "إجمالي narration من 335 إلى 365 كلمة ليكون الفيديو حوالي 3 دقائق.\n"
+        "كل مشهد من 35 إلى 45 كلمة، ويجب أن يضيف معلومة أو يطوّر الشرح بدون تكرار."
     )
     repair_prompt = (
         "أصلح النص التالي وأعده كـ JSON صحيح نحويًا فقط.\n"
