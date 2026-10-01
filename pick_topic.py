@@ -158,8 +158,29 @@ def ensure_topics_available() -> List[str]:
 def main():
     lines = ensure_topics_available()
 
-    topic = lines[0]
-    remaining = lines[1:]
+    def is_story_topic(value: str) -> bool:
+        return value.strip().startswith("سلسلة:")
+
+    used = read_used_topics()
+    last_types = [is_story_topic(x) for x in used[-2:]]
+    # الجدول المطلوب: موضوعان معلوماتيان ثم حلقة قصة واحدة.
+    # إذا كانت آخر حلقتين معلوماتيتين، يأتي الدور التالي للقصة.
+    want_story = len(last_types) >= 2 and last_types[-1] is False and last_types[-2] is False
+
+    story_topics = [x for x in lines if is_story_topic(x)]
+    knowledge_topics = [x for x in lines if not is_story_topic(x)]
+
+    if want_story and story_topics:
+        topic = story_topics[0]
+    elif knowledge_topics:
+        topic = knowledge_topics[0]
+    elif story_topics:
+        topic = story_topics[0]
+    else:
+        raise RuntimeError("لا توجد مواضيع متاحة")
+
+    remaining = lines.copy()
+    remaining.remove(topic)
 
     with open(TOPICS_FILE, "w", encoding="utf-8") as f:
         f.write("\n".join(remaining) + ("\n" if remaining else ""))
@@ -173,15 +194,13 @@ def main():
         with open(github_env, "a", encoding="utf-8") as f:
             f.write(f"VIDEO_TOPIC={topic}\n")
 
+    kind = "قصة" if is_story_topic(topic) else "معلوماتي"
+    print(f"نوع الفيديو: {kind}")
     print(f"الموضوع المختار: {topic}")
     print(f"باقي {len(remaining)} موضوع في القائمة")
 
     if len(remaining) <= 4:
-        print(
-            "::notice::قائمة المواضيع أوشكت تخلص، هيتم توليد دفعة جديدة تلقائيًا "
-            "في المرة الجاية اللي القائمة تفضى فيها"
-        )
-
+        print("::notice::قائمة المواضيع أوشكت تخلص، هيتم توليد دفعة جديدة تلقائيًا في المرة الجاية اللي القائمة تفضى فيها")
 
 if __name__ == "__main__":
     main()
