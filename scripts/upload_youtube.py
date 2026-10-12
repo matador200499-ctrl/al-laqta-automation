@@ -42,7 +42,7 @@ def main():
 
     video_title = str(content.get("title", "فيديو جديد - اللقطة")).strip()
     if os.environ.get("CAPTION_REPAIR_RUN") == "1":
-        video_title = video_title[:80].rstrip() + " - الكتابة المصححة"
+        video_title = video_title[:80].rstrip() + " - النسخة النهائية"
 
     body = {
         "snippet": {
