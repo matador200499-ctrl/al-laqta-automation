@@ -163,7 +163,7 @@ def main():
         github_env = os.environ.get("GITHUB_ENV")
         if github_env:
             with open(github_env, "a", encoding="utf-8") as f:
-                f.write(f"VIDEO_TOPIC={topic}\\n")
+                f.write("VIDEO_TOPIC=" + topic + chr(10))
         print("وضع إصلاح الكتابة: إعادة إنتاج فارس وسلمى الحلقة الأولى فقط.")
         print(f"الموضوع المختار: {topic}")
         return
