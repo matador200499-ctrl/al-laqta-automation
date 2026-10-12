@@ -40,9 +40,13 @@ def main():
 
     youtube = get_authenticated_service()
 
+    video_title = str(content.get("title", "فيديو جديد - اللقطة")).strip()
+    if os.environ.get("CAPTION_REPAIR_RUN") == "1":
+        video_title = video_title[:80].rstrip() + " - الكتابة المصححة"
+
     body = {
         "snippet": {
-            "title": content.get("title", "فيديو جديد - اللقطة"),
+            "title": video_title,
             "description": content.get("description", ""),
             "tags": content.get("tags", []),
             "categoryId": "24",  # Entertainment — قصص وترفيه
