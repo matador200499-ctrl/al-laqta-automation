@@ -18,7 +18,7 @@ import glob
 
 import arabic_reshaper
 from bidi.algorithm import get_display
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, features
 
 WIDTH, HEIGHT = 1080, 1920
 FONT_PATH = os.environ.get("ARABIC_FONT_PATH", "/usr/share/fonts/truetype/noto/NotoNaskhArabic-Regular.ttf")
@@ -53,7 +53,11 @@ def load_font(size: int):
         if path and path not in seen and os.path.exists(path):
             seen.add(path)
             try:
-                font = ImageFont.truetype(path, size)
+                layout_engine = (
+                    ImageFont.Layout.RAQM if features.check("raqm")
+                    else ImageFont.Layout.BASIC
+                )
+                font = ImageFont.truetype(path, size, layout_engine=layout_engine)
                 # Noto Arabic fonts are known to contain the Arabic glyphs.
                 if font.getbbox("مرحبا بالعالم") is not None:
                     return font
@@ -63,9 +67,12 @@ def load_font(size: int):
 
 
 def rtl_text(text: str):
-    """تشكيل عربي ثابت بدون الاعتماد على RAQM، لمنع ظهور الحروف كمربعات."""
+    """Render Arabic with Pillow's RAQM engine; only pre-shape for BASIC fallback."""
     cleaned = re.sub(r"\s+", " ", str(text)).strip()
-    # تشكيل الحروف العربية ثم عكس ترتيب العرض بصريًا.
+    if features.check("raqm"):
+        # Let RAQM handle Arabic joining and bidirectional layout exactly once.
+        return cleaned, {"direction": "rtl", "language": "ar"}
+    # Without RAQM, pre-shape/reorder the text and use a BASIC-layout font.
     shaped = arabic_reshaper.reshape(cleaned)
     return get_display(shaped), {}
 
