@@ -29,6 +29,42 @@ def parse_episode(topic: str):
         return {"series": "قصة لم تنتهِ", "episode": 1, "plot": topic.strip()}
     return {"series": match.group(1).strip(), "episode": int(match.group(2)), "plot": match.group(3).strip()}
 
+
+def caption_from_narration(narration: str) -> str:
+    """Build on-screen text from the actual narration, never from a separate AI phrase."""
+    normalized = re.sub(r"\s+", " ", str(narration)).strip()
+    if not normalized:
+        return "تابع تفاصيل الحكاية"
+
+    # Prefer a complete short first sentence. If it is longer, show an exact excerpt
+    # with an ellipsis rather than risking an unrelated or hallucinated caption.
+    sentences = [
+        part.strip()
+        for part in re.split(r"(?<=[.!?؟؛])\s+", normalized)
+        if part.strip()
+    ]
+    first_sentence = sentences[0] if sentences else normalized
+    first_words = first_sentence.split()
+
+    if 4 <= len(first_words) <= 8:
+        words = first_words
+    elif len(first_words) > 8:
+        words = first_words[:7]
+        words[-1] = words[-1].rstrip("،؛:,.!?؟")
+        return " ".join(words) + "…"
+    else:
+        # Short opening: combine the next sentence until we have a readable phrase.
+        words = []
+        for sentence in sentences or [normalized]:
+            words.extend(sentence.split())
+            if len(words) >= 4:
+                break
+        words = words[:8]
+
+    caption = " ".join(words).strip()
+    return caption or "تابع تفاصيل الحكاية"
+
+
 def parse_json_response(raw: str, is_story: bool) -> dict:
     text = raw.strip()
     text = re.sub(r"^```(?:json)?\s*", "", text, flags=re.IGNORECASE)
@@ -42,6 +78,9 @@ def parse_json_response(raw: str, is_story: bool) -> dict:
     expected_scenes = 6 if is_story else 9
     if not isinstance(scenes, list) or len(scenes) != expected_scenes:
         raise ValueError(f"Generated JSON must contain exactly {expected_scenes} scenes")
+    if any(not isinstance(scene, dict) for scene in scenes):
+        raise ValueError("Every generated scene must be a JSON object")
+
     total_words = sum(len(str(scene.get("narration", "")).split()) for scene in scenes)
     if is_story:
         if total_words < 130 or total_words > 190:
@@ -57,8 +96,14 @@ def parse_json_response(raw: str, is_story: bool) -> dict:
             raise ValueError(f"Scene {index} narration must contain {min_scene_words}-{max_scene_words} words, got {words}")
     required = ("narration", "onscreen_text", "keywords")
     for index, scene in enumerate(scenes, start=1):
-        if not isinstance(scene, dict) or any(not str(scene.get(key, "")).strip() for key in required):
+        if any(not str(scene.get(key, "")).strip() for key in required):
             raise ValueError(f"Scene {index} is missing required fields")
+
+    # Use a literal excerpt from the narration for the caption. This prevents the
+    # model from putting unrelated or malformed Arabic text in the black caption bar.
+    for scene in scenes:
+        scene["onscreen_text"] = caption_from_narration(scene["narration"])
+
     data["title"] = str(data.get("title") or "فيديو جديد - اللقطة").strip()
     if not re.search(r"[\u0600-\u06FF]", data["title"]) or re.search(r"[A-Za-z]", data["title"]):
         data["title"] = "حلقة جديدة من اللقطة"
@@ -69,6 +114,8 @@ def parse_json_response(raw: str, is_story: bool) -> dict:
         data["description"] = "فيديو معلوماتي من قناة اللقطة يشرح موضوع الحلقة بطريقة بسيطة ومشوقة، مع أهم الحقائق والتفاصيل التي تساعدك تفهم الموضوع في حوالي 3 دقائق."
         data["tags"] = ["اللقطة", "علوم", "معلومات", "حقائق", "تاريخ", "فضاء", "تكنولوجيا"]
     return data
+
+
 def build_prompt(topic: str) -> str:
     info = parse_episode(topic)
     is_story = topic.strip().startswith("سلسلة:")
@@ -89,7 +136,7 @@ def build_prompt(topic: str) -> str:
 3) عامية مصرية سهلة.
 4) بالضبط 6 مشاهد، وإجمالي narration من 130 إلى 190 كلمة.
 5) كل مشهد يدفع القصة للأمام وينتهي بتشويق طبيعي.
-6) onscreen_text عربي فقط، من 4 إلى 8 كلمات.
+6) onscreen_text عربي فقط، من 4 إلى 8 كلمات ومأخوذ حرفيًا من narration نفسه.
 7) keywords إنجليزية من 4 إلى 7 كلمات، وتحتوي في كل مشهد على نفس وصف الشخصيات والمكان/الفعل.
 8) أعد JSON صحيح فقط بدون Markdown.
 9) title عربي ويحتوي اسم السلسلة ورقم الحلقة.
@@ -114,7 +161,7 @@ narration, onscreen_text, keywords
 2) اشرح الموضوع بطريقة بسيطة ومشوقة وبالعامية المصرية.
 3) بالضبط 9 مشاهد، وإجمالي narration من 335 إلى 365 كلمة ليكون الفيديو حوالي 3 دقائق.
 4) كل مشهد حوالي 35 إلى 45 كلمة، ويضيف معلومة جديدة أو يطوّر الشرح بدون تكرار.
-5) onscreen_text عربي فقط، من 4 إلى 8 كلمات.
+5) onscreen_text عربي فقط، من 4 إلى 8 كلمات ومأخوذ حرفيًا من narration نفسه.
 6) keywords إنجليزية من 4 إلى 7 كلمات تصف الشيء/المكان/الفعل الخاص بالمشهد، بدون أسماء شخصيات أو أوصاف رومانسية.
 7) أعد JSON صحيح فقط بدون Markdown.
 8) title عربي جذاب لا يزيد عن 80 حرفًا.
@@ -126,6 +173,7 @@ title, description, tags, scenes
 وكل مشهد:
 narration, onscreen_text, keywords
 """.strip()
+
 
 def request_generation(client: Groq, prompt: str):
     return client.chat.completions.create(
@@ -153,6 +201,7 @@ def repair_json(client: Groq, raw: str, is_story: bool) -> dict:
         "يجب أن يحتوي الناتج على: title, description, tags, scenes.\n"
         + target + "\n"
         + "كل مشهد يجب أن يكون كائنًا مستقلًا ويحتوي بالضبط على: narration, onscreen_text, keywords.\n"
+        + "onscreen_text يجب أن يكون مقتبسًا حرفيًا من narration نفسه.\n"
         + "keywords يجب أن تكون نصًا إنجليزيًا، وليس قائمة.\n"
         + "لا تترك أي حقل فارغًا.\n"
         + "النص المراد إصلاحه:\n"
@@ -166,6 +215,8 @@ def repair_json(client: Groq, raw: str, is_story: bool) -> dict:
         response_format={"type": "json_object"},
     )
     return parse_json_response(repaired.choices[0].message.content or "", is_story)
+
+
 def generate_with_retry(client: Groq, prompt: str, is_story: bool) -> dict:
     last_error = None
     raw = ""
