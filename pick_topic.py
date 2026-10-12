@@ -156,6 +156,18 @@ def ensure_topics_available() -> List[str]:
 
 
 def main():
+    # Temporary one-shot render to repair the already published Faris and Salma episode.
+    # This branch is only used by the temporary push trigger and never consumes the queue.
+    if os.environ.get("GITHUB_EVENT_NAME") == "push":
+        topic = "سلسلة: فارس وسلمى | الحلقة 1 | يوم عادي انتهى برسالة غريبة"
+        github_env = os.environ.get("GITHUB_ENV")
+        if github_env:
+            with open(github_env, "a", encoding="utf-8") as f:
+                f.write(f"VIDEO_TOPIC={topic}\\n")
+        print("وضع إصلاح الكتابة: إعادة إنتاج فارس وسلمى الحلقة الأولى فقط.")
+        print(f"الموضوع المختار: {topic}")
+        return
+
     lines = ensure_topics_available()
 
     def is_story_topic(value: str) -> bool:
