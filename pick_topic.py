@@ -156,7 +156,7 @@ def ensure_topics_available() -> List[str]:
 
 
 def main():
-    # Temporary one-shot render to repair the already published Faris and Salma episode.
+    # Temporary one-shot caption-repair render for the already published Faris and Salma episode.
     # This branch is only used by the temporary push trigger and never consumes the queue.
     if os.environ.get("GITHUB_EVENT_NAME") == "push":
         topic = "سلسلة: فارس وسلمى | الحلقة 1 | يوم عادي انتهى برسالة غريبة"
