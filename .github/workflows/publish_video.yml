@@ -1,6 +1,12 @@
 name: Publish Video (Automated)
 
 on:
+  # Temporary single-run trigger to rebuild the existing episode with fixed captions.
+  push:
+    branches:
+      - main
+    paths:
+      - 'pick_topic.py'
   schedule:
     # 8 videos every day — one every 3 hours.
     # UTC: 00:00, 03:00, 06:00, 09:00, 12:00, 15:00, 18:00, 21:00
@@ -63,6 +69,15 @@ jobs:
       - name: Assemble video
         run: python scripts/assemble_video.py
 
+      - name: Save corrected-caption preview artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: corrected-caption-faris-salma
+          path: |
+            final_video.mp4
+            script.json
+          retention-days: 7
+
       - name: Upload to YouTube
         env:
           YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
@@ -70,6 +85,7 @@ jobs:
           YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
           VIDEO_PATH: final_video.mp4
           PRIVACY_STATUS: public
+          CAPTION_REPAIR_RUN: ${{ github.event_name == 'push' && '1' || '0' }}
         run: python scripts/upload_youtube.py
 
       - name: Save topic rotation
