@@ -1,12 +1,6 @@
 name: Publish Video (Automated)
 
 on:
-  # Temporary repair trigger: a commit to the voice generator starts one validation run.
-  push:
-    branches:
-      - main
-    paths:
-      - 'scripts/generate_voice.py'
   schedule:
     # 8 videos every day — one every 3 hours.
     # UTC: 00:00, 03:00, 06:00, 09:00, 12:00, 15:00, 18:00, 21:00
