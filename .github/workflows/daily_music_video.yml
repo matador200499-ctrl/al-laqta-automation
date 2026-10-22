@@ -1,49 +1,85 @@
-name: Optional ACE-Step Song Video
+name: Free Music Video (Manual Song)
 
 on:
   workflow_dispatch:
+    inputs:
+      song_title:
+        description: "عنوان الأغنية"
+        required: true
+        type: string
+        default: "أغنية مصرية جديدة"
+      song_theme:
+        description: "موضوع الأغنية"
+        required: false
+        type: string
+        default: "أغنية مصرية أصلية"
+
+concurrency:
+  group: free-music-video
+  cancel-in-progress: false
+
+permissions:
+  contents: read
 
 jobs:
   song:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
 
-      - name: Check ACE-Step configuration
-        id: check
+      - name: Verify free song file and required secrets
         env:
-          ACE_STEP_API_URL: ${{ secrets.ACE_STEP_API_URL }}
+          PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+          YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
+          YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
+          YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
         run: |
-          if [ -z "${ACE_STEP_API_URL}" ]; then
-            echo "configured=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::ACE-Step is not configured. This optional song workflow will be skipped."
-          else
-            echo "configured=true" >> "$GITHUB_OUTPUT"
+          set -e
+          if [ ! -s "music_input/song.mp3" ]; then
+            echo "::error::Missing music_input/song.mp3. Download your free ACE-Step song and upload it there first."
+            exit 1
           fi
+          missing=0
+          for key in PEXELS_API_KEY YT_CLIENT_ID YT_CLIENT_SECRET YT_REFRESH_TOKEN; do
+            if [ -z "${!key}" ]; then
+              echo "::error::Missing required GitHub Actions secret: $key"
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            exit 1
+          fi
+          echo "Song file and required secrets found."
 
       - uses: actions/setup-python@v5
-        if: steps.check.outputs.configured == 'true'
         with:
-          python-version: '3.11'
+          python-version: "3.11"
 
-      - name: Install
-        if: steps.check.outputs.configured == 'true'
+      - name: Install free video tools
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends ffmpeg
-          pip install requests
+          python -m pip install --upgrade pip
+          pip install requests google-api-python-client google-auth google-auth-httplib2 google-auth-oauthlib
 
-      - name: Generate song and video
-        if: steps.check.outputs.configured == 'true'
+      - name: Assemble vertical music video
         env:
-          ACE_STEP_API_URL: ${{ secrets.ACE_STEP_API_URL }}
-          ACE_STEP_API_KEY: ${{ secrets.ACE_STEP_API_KEY }}
           PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
-        run: python scripts/generate_music_song.py
+          SONG_TITLE: ${{ inputs.song_title }}
+          SONG_THEME: ${{ inputs.song_theme }}
+        run: python scripts/create_free_music_video.py
 
-      - name: Upload to YouTube
-        if: steps.check.outputs.configured == 'true'
+      - name: Save video preview artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: free-music-video-preview
+          path: |
+            final_music_video.mp4
+            content.json
+          retention-days: 7
+
+      - name: Upload music video to YouTube
         env:
           YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
           YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
