@@ -1,7 +1,20 @@
-name: Optional ACE-Step Song Video
+name: AI Music Video (fal)
 
 on:
   workflow_dispatch:
+    inputs:
+      song_theme:
+        description: "موضوع الأغنية (اتركه فارغًا لاختيار فكرة تلقائيًا)"
+        required: false
+        type: string
+        default: ""
+
+concurrency:
+  group: ai-music-video
+  cancel-in-progress: false
+
+permissions:
+  contents: read
 
 jobs:
   song:
@@ -10,40 +23,61 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Check ACE-Step configuration
-        id: check
+      - name: Verify required secrets
         env:
-          ACE_STEP_API_URL: ${{ secrets.ACE_STEP_API_URL }}
+          FAL_KEY: ${{ secrets.FAL_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+          YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
+          YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
+          YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
         run: |
-          if [ -z "${ACE_STEP_API_URL}" ]; then
-            echo "configured=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::ACE-Step is not configured. This optional song workflow will be skipped."
-          else
-            echo "configured=true" >> "$GITHUB_OUTPUT"
+          set -e
+          missing=0
+          for key in FAL_KEY GROQ_API_KEY PEXELS_API_KEY YT_CLIENT_ID YT_CLIENT_SECRET YT_REFRESH_TOKEN; do
+            if [ -z "${!key}" ]; then
+              echo "::error::Missing required GitHub Actions secret: $key"
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            echo "Add the missing secrets in Settings > Secrets and variables > Actions, then run again."
+            exit 1
           fi
+          echo "All required secrets are present."
 
       - uses: actions/setup-python@v5
-        if: steps.check.outputs.configured == 'true'
         with:
-          python-version: '3.11'
+          python-version: "3.11"
 
-      - name: Install
-        if: steps.check.outputs.configured == 'true'
+      - name: Install dependencies
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends ffmpeg
-          pip install requests
+          python -m pip install --upgrade pip
+          pip install requests google-api-python-client google-auth google-auth-httplib2 google-auth-oauthlib
 
       - name: Generate song and video
-        if: steps.check.outputs.configured == 'true'
         env:
-          ACE_STEP_API_URL: ${{ secrets.ACE_STEP_API_URL }}
-          ACE_STEP_API_KEY: ${{ secrets.ACE_STEP_API_KEY }}
+          FAL_KEY: ${{ secrets.FAL_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          GROQ_MODEL: openai/gpt-oss-120b
           PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+          SONG_THEME: ${{ inputs.song_theme }}
         run: python scripts/generate_music_song.py
 
+      - name: Save song preview artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-music-song-preview
+          path: |
+            final_music_video.mp4
+            lyrics.txt
+            song_info.json
+            content.json
+          retention-days: 7
+
       - name: Upload to YouTube
-        if: steps.check.outputs.configured == 'true'
         env:
           YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
           YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
