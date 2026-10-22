@@ -1,74 +1,159 @@
-import os,json,requests,time,subprocess
+import os, json, requests, time, subprocess, random
 from pathlib import Path
+from urllib.parse import urlparse
 
-ACE_STEP_URL=os.environ.get("ACE_STEP_API_URL", "").rstrip("/")
-ACE_STEP_KEY=os.environ.get("ACE_STEP_API_KEY", "")
-R=Path("music_work")
+FAL_KEY = os.environ.get("FAL_KEY", "").strip()
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "").strip()
+R = Path("music_work")
 R.mkdir(exist_ok=True)
 
-song_prompt = """Original Egyptian Arabic pop song about two fictional lovers in Cairo.
-Around two minutes, with a clear intro, verses, catchy chorus, bridge and outro.
-Modern Egyptian pop production, emotional male and female vocals, piano, guitar, warm synths and drums.
-Write original lyrics only. Do not imitate or reference any named artist."""
+GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
+GROQ_MODEL = os.environ.get("GROQ_MODEL", "openai/gpt-oss-120b")
+FAL_ENDPOINT = "https://queue.fal.run/fal-ai/ace-step"
 
-if not ACE_STEP_URL:
-    raise RuntimeError(
-        "ACE_STEP_API_URL is not configured. Run ACE-Step 1.5 on a GPU machine "
-        "and add its URL as a GitHub Actions secret. See README.md."
-    )
+SONG_THEMES = [
+    "حكاية حب بدأت صدفة في شوارع القاهرة",
+    "الاشتياق لشخص بعيد رغم مرور الأيام",
+    "بداية جديدة بعد تجربة حب انتهت",
+    "ليلة مطر واعتراف متأخر بالمشاعر",
+    "حلم بسيط يجمع حبيبين وسط زحمة الحياة",
+    "رسالة قديمة أعادت ذكريات جميلة",
+    "فرحة الرجوع بعد غياب طويل",
+    "حب هادئ يظهر في التفاصيل اليومية",
+]
+SONG_STYLES = [
+    "modern Egyptian Arabic pop, romantic duet, male and female vocals, warm synths, piano, acoustic guitar, steady pop drums",
+    "upbeat Egyptian Arabic pop, playful vocal delivery, lively percussion, oud accents, modern bass and claps",
+    "emotional Egyptian Arabic pop ballad, expressive lead vocal, piano, cinematic strings, gentle percussion",
+]
 
-headers={"Content-Type":"application/json"}
-if ACE_STEP_KEY:
-    headers["Authorization"]="Bearer "+ACE_STEP_KEY
+if not FAL_KEY:
+    raise RuntimeError("FAL_KEY is missing. Create an API key at fal.ai and save it in GitHub Actions Secrets.")
+if not GROQ_API_KEY:
+    raise RuntimeError("GROQ_API_KEY is missing. The workflow uses Groq to write original Arabic lyrics.")
+if not os.environ.get("PEXELS_API_KEY", "").strip():
+    raise RuntimeError("PEXELS_API_KEY is missing. Add it to GitHub Actions Secrets.")
 
-payload={
-    "sample_query": song_prompt,
-    "thinking": True,
-    "vocal_language": "ar",
-    "audio_duration": 120,
-    "audio_format": "mp3",
-    "model": "acestep-v15-turbo"
+song_theme = os.environ.get("SONG_THEME", "").strip() or random.choice(SONG_THEMES)
+song_style = random.choice(SONG_STYLES)
+
+# First write fresh, original Egyptian-colloquial Arabic lyrics; then send those lyrics to fal/ACE-Step.
+lyrics_prompt = f"""اكتب كلمات أغنية مصرية أصلية باللهجة المصرية عن الموضوع التالي: {song_theme}
+الأسلوب الموسيقي المقترح: {song_style}
+الشروط:
+- كلمات أصلية بالكامل، من غير اقتباس من أغنية معروفة أو تقليد فنان بعينه.
+- إحساس مصري طبيعي، قافية سهلة، لازمة جذابة قابلة للترديد.
+- طول مناسب لأغنية مدتها نحو دقيقتين.
+- استخدم هذه الأقسام داخل الكلمات: [Verse 1] ثم [Chorus] ثم [Verse 2] ثم [Bridge] ثم [Chorus].
+- اكتب باللهجة المصرية، ولا تضع وصفًا للموسيقى داخل الكلمات.
+- أعد JSON صالحًا فقط بالمفتاحين title و lyrics، من غير Markdown أو شرح."""
+
+groq_response = requests.post(
+    GROQ_API_URL,
+    headers={"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"},
+    json={
+        "model": GROQ_MODEL,
+        "messages": [
+            {"role": "system", "content": "أنت كاتب أغانٍ محترف يكتب كلمات أصلية باللهجة المصرية. أعد JSON صالحًا فقط."},
+            {"role": "user", "content": lyrics_prompt},
+        ],
+        "temperature": 0.9,
+    },
+    timeout=90,
+)
+if not groq_response.ok:
+    raise RuntimeError(f"Groq lyrics request failed HTTP {groq_response.status_code}: {groq_response.text[:1200]}")
+try:
+    lyrics_result = groq_response.json()["choices"][0]["message"]["content"].strip()
+except (ValueError, KeyError, IndexError, TypeError) as exc:
+    raise RuntimeError(f"Unexpected Groq lyrics response: {groq_response.text[:1200]}") from exc
+
+# Tolerate a model adding a JSON code fence despite the instruction.
+if lyrics_result.startswith(chr(96) * 3):
+    lyrics_result = lyrics_result.split("\n", 1)[1]
+    if lyrics_result.endswith(chr(96) * 3):
+        lyrics_result = lyrics_result[:-3].strip()
+try:
+    song_data = json.loads(lyrics_result)
+except json.JSONDecodeError:
+    start, end = lyrics_result.find("{"), lyrics_result.rfind("}")
+    if start < 0 or end <= start:
+        raise RuntimeError("Groq did not return a valid JSON object for song lyrics.")
+    song_data = json.loads(lyrics_result[start:end + 1])
+
+song_title = str(song_data.get("title", "")).strip()
+lyrics = str(song_data.get("lyrics", "")).strip()
+if not song_title or len(lyrics) < 100:
+    raise RuntimeError("Groq returned an empty title or lyrics that are too short.")
+song_title = song_title[:90]
+Path("lyrics.txt").write_text(lyrics, encoding="utf-8")
+print(f"Original lyrics ready: {song_title}", flush=True)
+
+fal_headers = {"Authorization": f"Key {FAL_KEY}", "Content-Type": "application/json"}
+fal_payload = {
+    "tags": song_style,
+    "lyrics": lyrics,
+    "duration": 120,
+    "number_of_steps": 27,
 }
-r=requests.post(f"{ACE_STEP_URL}/release_task",headers=headers,json=payload,timeout=60)
-if not r.ok:
-    raise RuntimeError(f"ACE-Step submit HTTP {r.status_code}: {r.text[:2000]}")
-submitted=r.json()
-task_id=(submitted.get("data") or {}).get("task_id")
-if not task_id:
-    raise RuntimeError("ACE-Step returned no task_id: "+str(submitted)[:2000])
+submitted_response = requests.post(FAL_ENDPOINT, headers=fal_headers, json=fal_payload, timeout=90)
+if not submitted_response.ok:
+    raise RuntimeError(f"fal ACE-Step submit failed HTTP {submitted_response.status_code}: {submitted_response.text[:1600]}")
+submitted = submitted_response.json()
+request_id = submitted.get("request_id")
+status_url = submitted.get("status_url")
+response_url = submitted.get("response_url")
+if not request_id or not status_url or not response_url:
+    raise RuntimeError("fal returned no request_id/status_url/response_url: " + str(submitted)[:1600])
+print(f"fal song task submitted: {request_id}", flush=True)
 
-result=None
-for _ in range(180):
-    q=requests.post(f"{ACE_STEP_URL}/query_result",headers=headers,json={"task_id_list":[task_id]},timeout=60)
-    if not q.ok:
-        raise RuntimeError(f"ACE-Step query HTTP {q.status_code}: {q.text[:2000]}")
-    rows=(q.json().get("data") or [])
-    row=rows[0] if rows else {}
-    status=row.get("status")
-    if status == 1:
-        raw=row.get("result", "[]")
-        result=json.loads(raw) if isinstance(raw,str) else raw
+result_status = None
+for attempt in range(180):
+    status_response = requests.get(status_url, headers={"Authorization": f"Key {FAL_KEY}"}, timeout=60)
+    if not status_response.ok:
+        raise RuntimeError(f"fal status check failed HTTP {status_response.status_code}: {status_response.text[:1000]}")
+    status_data = status_response.json()
+    result_status = str(status_data.get("status", "")).upper()
+    if result_status == "COMPLETED":
         break
-    if status == 2:
-        raise RuntimeError("ACE-Step generation failed: "+str(row)[:2000])
+    if result_status in {"FAILED", "CANCELLED"}:
+        raise RuntimeError("fal music generation failed: " + str(status_data)[:1800])
+    if attempt % 6 == 0:
+        print(f"Waiting for fal music generation ({result_status or 'pending'})...", flush=True)
     time.sleep(10)
-if not result:
-    raise RuntimeError("ACE-Step generation timed out after 30 minutes")
+else:
+    raise RuntimeError("fal music generation timed out after 30 minutes.")
 
-audio_path=result[0].get("file") if isinstance(result,list) else result.get("file")
-if not audio_path:
-    raise RuntimeError("ACE-Step returned no audio file: "+str(result)[:2000])
-audio=requests.get(f"{ACE_STEP_URL}{audio_path}",headers=headers,timeout=180)
-if not audio.ok:
-    raise RuntimeError(f"ACE-Step audio download HTTP {audio.status_code}: {audio.text[:1000]}")
-(R/"song.mp3").write_bytes(audio.content)
-lyrics=(result[0].get("lyrics", "") if isinstance(result,list) else result.get("lyrics", ""))
-Path("lyrics.txt").write_text(lyrics,encoding="utf-8")
-print("ACE-Step song ready", flush=True)
+result_response = requests.get(response_url, headers={"Authorization": f"Key {FAL_KEY}"}, timeout=90)
+if not result_response.ok:
+    raise RuntimeError(f"fal result fetch failed HTTP {result_response.status_code}: {result_response.text[:1200]}")
+result = result_response.json()
+audio_info = result.get("audio") or {}
+audio_url = audio_info.get("url")
+if not audio_url:
+    raise RuntimeError("fal completed without an audio URL: " + str(result)[:1600])
 
-PEXELS_KEY=os.environ.get("PEXELS_API_KEY", "")
-if not PEXELS_KEY:
-    raise RuntimeError("PEXELS_API_KEY is not configured")
+audio_response = requests.get(audio_url, timeout=180)
+if not audio_response.ok:
+    raise RuntimeError(f"Audio download failed HTTP {audio_response.status_code}: {audio_response.text[:800]}")
+content_type = str(audio_info.get("content_type", audio_response.headers.get("Content-Type", ""))).lower()
+url_path = urlparse(audio_url).path.lower()
+audio_suffix = ".mp3" if ("mpeg" in content_type or url_path.endswith(".mp3")) else ".wav"
+song_audio_path = R / f"song{audio_suffix}"
+song_audio_path.write_bytes(audio_response.content)
+# Save the lyrics returned by the model when available, otherwise keep the source lyrics.
+Path("lyrics.txt").write_text(str(result.get("lyrics") or lyrics), encoding="utf-8")
+Path("song_info.json").write_text(
+    json.dumps(
+        {"title": song_title, "theme": song_theme, "style": song_style, "audio_url": audio_url,
+         "request_id": request_id, "duration_requested_seconds": 120},
+        ensure_ascii=False, indent=2,
+    ),
+    encoding="utf-8",
+)
+print(f"fal song audio ready: {song_audio_path}", flush=True)
+
+PEXELS_KEY = os.environ.get("PEXELS_API_KEY", "").strip()
 PEXELS_SEARCH="https://api.pexels.com/videos/search"
 
 scenes=[
@@ -125,6 +210,17 @@ for n,p in enumerate(scenes,1):
 files=sorted(R.glob("scene_*.mp4"))
 (R/"concat.txt").write_text("".join(f"file '{x.resolve()}'\n" for x in files),encoding="utf-8")
 subprocess.run(["ffmpeg","-y","-f","concat","-safe","0","-i",str(R/"concat.txt"),"-an","-c:v","libx264","-pix_fmt","yuv420p",str(R/"visuals.mp4")],check=True)
-subprocess.run(["ffmpeg","-y","-stream_loop","-1","-i",str(R/"visuals.mp4"),"-i",str(R/"song.mp3"),"-map","0:v:0","-map","1:a:0","-c:v","copy","-c:a","aac","-b:a","192k","-shortest","-movflags","+faststart","final_music_video.mp4"],check=True)
-Path("content.json").write_text('{"title":"أغنية مصرية أصلية جديدة","description":"أغنية أصلية وكليب سينمائي مولدان بالذكاء الاصطناعي.","tags":["أغاني","موسيقى","أغاني مصرية","أغاني عربية","AI music","كليب"]}',encoding="utf-8")
+subprocess.run(["ffmpeg","-y","-stream_loop","-1","-i",str(R/"visuals.mp4"),"-i",str(song_audio_path),"-map","0:v:0","-map","1:a:0","-c:v","copy","-c:a","aac","-b:a","192k","-shortest","-movflags","+faststart","final_music_video.mp4"],check=True)
+Path("content.json").write_text(
+    json.dumps(
+        {
+            "title": song_title,
+            "description": f"أغنية مصرية أصلية بعنوان: {song_title}. كلمات جديدة وموسيقى مولدة بالذكاء الاصطناعي.\nالموضوع: {song_theme}",
+            "tags": ["أغاني", "أغاني مصرية", "أغاني عربية", "موسيقى", "AI music", "كليب", "أغاني جديدة"],
+        },
+        ensure_ascii=False,
+        indent=2,
+    ),
+    encoding="utf-8",
+)
 print("MUSIC VIDEO READY")
