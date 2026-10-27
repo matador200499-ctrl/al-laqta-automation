@@ -54,6 +54,8 @@ def main():
         "status": {
             "privacyStatus": privacy_status,  # private / unlisted / public
             "selfDeclaredMadeForKids": False,
+            # Official YouTube Data API field for declaring realistic synthetic media.
+            "containsSyntheticMedia": bool(content.get("contains_synthetic_media", False)),
         },
     }
 
