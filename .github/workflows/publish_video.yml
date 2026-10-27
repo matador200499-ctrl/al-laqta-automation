@@ -11,6 +11,11 @@ on:
         description: "موضوع فيديو يدوي (اتركه فارغًا لاستخدام قائمة المواضيع)"
         required: false
         type: string
+      dry_run:
+        description: "تشغيل تجريبي: جهّز الفيديو والمعاينة دون نشره على يوتيوب"
+        required: false
+        type: boolean
+        default: false
 
 # يمنع تشغيل نسختين من النشر في نفس الوقت،
 # وبالتالي لا يمكن لتشغيلين قراءة نفس topics.txt وإنتاج نفس الفيديو.
@@ -127,7 +132,12 @@ jobs:
             captions_ar.srt
           retention-days: 7
 
+      - name: Explain dry run result
+        if: ${{ inputs.dry_run == true }}
+        run: echo "Dry run complete. Video, metadata and Arabic subtitles are saved in the workflow artifact; no YouTube upload was attempted."
+
       - name: Upload to YouTube
+        if: ${{ inputs.dry_run != true }}
         env:
           YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
           YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
@@ -138,6 +148,7 @@ jobs:
         run: python scripts/upload_youtube.py
 
       - name: Save topic rotation
+        if: ${{ inputs.dry_run != true }}
         run: |
           set -e
           git config user.name "github-actions[bot]"
