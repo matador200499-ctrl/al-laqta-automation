@@ -144,9 +144,12 @@ def main():
         "-shortest", "-movflags", "+faststart", "final_music_video.mp4",
     ])
 
-    music_hashtags = ["#اللقطة", "#أغاني_مصرية", "#أغاني_عربية", "#موسيقى", "#Shorts"]
+    music_hashtags = ["#اللقطة", "#أغاني_مصرية", "#أغاني_عربية", "#موسيقى"]
     if any(word in SONG_THEME for word in ("رومانسي", "حب", "عاطفي", "حنين", "عمر وسلمى", "عمر وسلما")):
         music_hashtags.insert(3, "#أغاني_رومانسية")
+    # Never label a longer music video as a Short.
+    if duration <= 180:
+        music_hashtags.append("#Shorts")
     content = {
         "title": SONG_TITLE[:90],
         "description": (
