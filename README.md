@@ -1,6 +1,6 @@
 # أتمتة قناة اللقطة (Al Laqta) — نظام كامل مجاني
 
-نظام أتمتة كامل بينشر فيديوهات على يوتيوب **4 مرات يوميًا** من غير أي تدخل بشري بعد الإعداد الأولي، وكل مكوناته مجانية:
+نظام أتمتة كامل بينشر فيديوهات على يوتيوب **8 مرات يوميًا** من غير أي تدخل بشري بعد الإعداد الأولي، وكل مكوناته مجانية:
 
 **المسار الأساسي المستقر هو `Publish Video (Automated)`** للفيديوهات المعلوماتية والقصص. أما الأغاني فلها Workflow منفصل بدون API موسيقى مدفوع: توليد الصوت يدويًا عبر واجهة ACE-Step المجانية، ثم بناء الفيديو العمودي ورفعه آليًا من GitHub بعد إضافة ملف الأغنية إلى `music_input/song.mp3`.
 
@@ -29,7 +29,7 @@
 al-laqta-automation/
 ├── .github/workflows/publish_video.yml   ← المسار الأساسي المجدول 4 مرات/يوم
 ├── scripts/
-│   ├── generate_script.py    ← Claude يكتب السكريبت مقسّم لمشاهد
+│   ├── generate_script.py    ← Groq يكتب السكريبت مقسّم لمشاهد
 │   ├── generate_voice.py     ← edge-tts يحوّل كل مشهد لصوت
 │   ├── fetch_clips.py        ← يجيب مقطع ستوك من Pexels لكل مشهد
 │   ├── assemble_video.py     ← يركب كل حاجة بـ FFmpeg (فيديو + صوت + كتابة)
@@ -58,7 +58,7 @@ al-laqta-automation/
 ### ج) مفتاح Pexels (مجاني)
 1. سجّل في [pexels.com/api](https://www.pexels.com/api/) بإيميلك (تسجيل فوري، بدون بطاقة ائتمان).
 2. هتاخد API key فورًا من الداشبورد.
-3. الحد المجاني: 200 طلب/ساعة و20,000 طلب/شهر — كافي جدًا لـ 4 فيديوهات يوميًا (كل فيديو بيستخدم ~10-12 طلب بحث).
+3. الحد المجاني: 200 طلب/ساعة و20,000 طلب/شهر — كافي جدًا لـ 8 فيديوهات يوميًا (كل فيديو بيستخدم ~10-12 طلب بحث).
 
 ### د) ضيف الـ Secrets في GitHub
 Settings → Secrets and variables → Actions → New repository secret:
@@ -78,10 +78,10 @@ Settings → Secrets and variables → Actions → New repository secret:
 
 ## 3) بعد كده، مفيش حاجة تعملها
 
-بمجرد ما الإعداد يخلص، سيعمل `Publish Video (Automated)` لوحده **4 مرات يوميًا** (الساعات مضبوطة في `publish_video.yml`). كل مرة:
+بمجرد ما الإعداد يخلص، سيعمل `Publish Video (Automated)` لوحده **8 مرات يوميًا** (الساعات مضبوطة في `publish_video.yml`). كل مرة:
 
 1. ياخد أول فكرة من `topics.txt`
-2. Groq يكتب كلمات أغنية مصرية مقسّمة لمقاطع
+2. Groq يكتب سكريبت حلقة معلوماتية أو قصة حسب الموضوع
 3. edge-tts يحوّل الكلمات إلى صوت عربي
 4. ينشئ موسيقى خلفية إيقاعية مجانية بـ FFmpeg
 5. Pexels يوفّر مقاطع فيديو لكل مشهد
@@ -104,7 +104,7 @@ Settings → Secrets and variables → Actions → New repository secret:
 
 ## 4) تشغيل يدوي لموضوع معين (اختياري)
 
-من تبويب **Actions** → **Publish Video (Automated)** → **Run workflow** → اكتب موضوع في خانة `manual_topic` لو عايز فيديو عن حاجة محددة خارج الطابور، من غير ما ياخد من `topics.txt`.
+من تبويب **Actions** → **Publish Video (Automated)** → **Run workflow** → اكتب موضوع في خانة `manual_topic` لو عايز فيديو عن حاجة محددة خارج الطابور، من غير ما ياخد من `topics.txt`. اكتب الموضوع في حقل `manual_topic` الظاهر بعد تفعيل الإدخال اليدوي.
 
 ---
 
@@ -112,7 +112,7 @@ Settings → Secrets and variables → Actions → New repository secret:
 
 - **تغيير صوت الراوي**: غيّر `TTS_VOICE` في `scripts/generate_voice.py` (أصوات عربية تانية متاحة: `ar-EG-SalmaNeural`, `ar-SA-HamedNeural`, `ar-SA-ZariyahNeural`).
 - **تغيير عدد مرات النشر**: عدّل سطر `cron` في `publish_video.yml`.
-- **تغيير مدة الفيديو**: عدّل عدد الكلمات المطلوب في `scripts/generate_script.py` (تم ضبطه حالياً لـ 15 دقيقة).
+- **تغيير مدة الفيديو**: عدّل عدد الكلمات المطلوب في `scripts/generate_script.py` (تم ضبطه حالياً لحوالي 3 دقائق للفيديو المعلوماتي).
 
 
 ## 6) مسار الأغاني المجاني (بدون API مدفوع)
