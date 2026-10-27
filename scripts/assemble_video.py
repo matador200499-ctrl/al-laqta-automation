@@ -260,7 +260,7 @@ def main():
             make_overlay_png(cue["text"], caption_path)
             caption_assets.append({"path": caption_path, **cue})
             subtitle_entries.append(
-                "{}\\n{} --> {}\\n{}\\n".format(
+                "{}\n{} --> {}\n{}\n".format(
                     len(subtitle_entries) + 1,
                     srt_timestamp(global_offset + cue["start"]),
                     srt_timestamp(global_offset + cue["end"]),
@@ -273,7 +273,7 @@ def main():
 
     # نحفظ ترجمة عربية كاملة بصيغة SRT، بالإضافة إلى ظهورها متزامنة داخل الفيديو.
     with open("captions_ar.srt", "w", encoding="utf-8-sig") as subtitle_file:
-        subtitle_file.write("\\n".join(subtitle_entries))
+        subtitle_file.write("\n".join(subtitle_entries))
 
     # 1) لزق كل مقاطع الفيديو مع بعض
     with open("segments/concat_list.txt", "w") as f:
