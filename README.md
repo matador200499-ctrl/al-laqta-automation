@@ -27,7 +27,7 @@
 
 ```
 al-laqta-automation/
-├── .github/workflows/publish_video.yml   ← المسار الأساسي المجدول 4 مرات/يوم
+├── .github/workflows/publish_video.yml   ← المسار الأساسي المجدول 8 مرات/يوم
 ├── scripts/
 │   ├── generate_script.py    ← Groq يكتب السكريبت مقسّم لمشاهد
 │   ├── generate_voice.py     ← edge-tts يحوّل كل مشهد لصوت
