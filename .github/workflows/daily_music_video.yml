@@ -86,6 +86,7 @@ jobs:
           assert content.get("description", "").strip(), "Missing song description"
           assert "#" in content["description"], "Missing hashtags in song description"
           assert content.get("category_id") == "10", "Music upload must use the Music category"
+          assert content.get("contains_synthetic_media") is True, "AI-generated music must be disclosed to YouTube"
           assert isinstance(content.get("tags"), list) and content["tags"], "Missing song tags"
           duration = float(subprocess.run(
               ["ffprobe", "-v", "error", "-show_entries", "format=duration",
