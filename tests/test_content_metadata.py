@@ -33,6 +33,40 @@ class TopicRotationTests(unittest.TestCase):
         self.assertTrue(future[2].startswith("سلسلة: عمر وسلمى | الحلقة 6 |"))
         self.assertTrue(set(future).isdisjoint(set(used)))
 
+    def test_fallback_after_groq_quota_uses_unused_local_ideas(self):
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            topics_path = Path(temp_dir) / "topics.txt"
+            used_path = Path(temp_dir) / "used_topics.txt"
+            old_topics_path = topic_module.TOPICS_FILE
+            old_used_path = topic_module.USED_FILE
+            old_generator = topic_module.generate_topics_with_groq
+            used_history = list(topic_module.FALLBACK_TOPICS[:15]) + [
+                "سلسلة: عمر وسلمى | الحلقة 1 | رسالة وصلت في وقت غلط",
+                "سلسلة: عمر وسلمى | الحلقة 2 | سر الصورة القديمة",
+                "سلسلة: عمر وسلمى | الحلقة 3 | القرار اللي غيّر كل حاجة",
+            ]
+            topics_path.write_text("", encoding="utf-8")
+            used_path.write_text("\n".join(used_history) + "\n", encoding="utf-8")
+            topic_module.TOPICS_FILE = str(topics_path)
+            topic_module.USED_FILE = str(used_path)
+            topic_module.generate_topics_with_groq = lambda: []
+            try:
+                queue = topic_module.ensure_topics_available()
+            finally:
+                topic_module.TOPICS_FILE = old_topics_path
+                topic_module.USED_FILE = old_used_path
+                topic_module.generate_topics_with_groq = old_generator
+
+            self.assertIn("لماذا نرى قوس قزح بعد المطر؟", queue)
+            self.assertTrue(set(queue).isdisjoint(set(used_history)))
+            self.assertEqual(
+                sum(1 for topic in queue if topic.startswith("سلسلة: عمر وسلمى | الحلقة ")),
+                3,
+            )
+
+
     def test_empty_topic_queue_refills_without_repeating_and_includes_stories(self):
         import tempfile
 
