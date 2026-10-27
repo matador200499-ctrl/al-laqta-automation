@@ -102,6 +102,9 @@ jobs:
           video = Path("final_video.mp4")
           if not video.is_file() or video.stat().st_size == 0:
               raise SystemExit("Final video is missing or empty.")
+          subtitles = Path("captions_ar.srt")
+          if not subtitles.is_file() or subtitles.stat().st_size < 100:
+              raise SystemExit("Arabic subtitles were not generated correctly.")
           result = subprocess.run(
               ["ffprobe", "-v", "error", "-show_entries", "format=duration",
                "-of", "default=noprint_wrappers=1:nokey=1", str(video)],
@@ -120,6 +123,8 @@ jobs:
           path: |
             final_video.mp4
             script.json
+            content.json
+            captions_ar.srt
           retention-days: 7
 
       - name: Upload to YouTube
