@@ -22,6 +22,46 @@ GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
 GROQ_MODEL = os.environ.get("GROQ_MODEL", "openai/gpt-oss-120b")
 TOPICS_TO_GENERATE = int(os.environ.get("TOPICS_TO_GENERATE", "15"))
 
+STORY_PLOTS = [
+    "رسالة وصلت في وقت غلط",
+    "سر الصورة القديمة",
+    "القرار اللي غيّر كل حاجة",
+    "مكالمة من رقم مجهول",
+    "لقاء غير متوقع في محطة القطر",
+    "حقيقة ظهرت بعد غياب طويل",
+    "وعد قديم رجع في أصعب وقت",
+    "صورة كشفت سرًا مخفيًا",
+    "اختفاء مفاجئ قبل موعد مهم",
+    "مواجهة قلبت كل التوقعات",
+    "اعتراف اتأخر سنين",
+    "الرسالة اللي ماكانش المفروض تتفتح",
+]
+
+
+def is_story_topic(value: str) -> bool:
+    return value.strip().startswith("سلسلة:")
+
+
+def build_next_story_topics(used_topics: List[str]) -> List[str]:
+    """Always queue fresh Omar and Salma episodes without reusing an episode number."""
+    last_episode = 0
+    pattern = re.compile(r"^سلسلة\s*:\s*عمر\s*و\s*سلمى\s*\|\s*الحلقة\s*(\d+)", re.UNICODE)
+    for value in used_topics:
+        match = pattern.search(value.strip())
+        if match:
+            last_episode = max(last_episode, int(match.group(1)))
+
+    existing = set(used_topics)
+    topics = []
+    for episode in range(last_episode + 1, last_episode + 4):
+        plot = STORY_PLOTS[(episode - 1) % len(STORY_PLOTS)]
+        topic = f"سلسلة: عمر وسلمى | الحلقة {episode} | {plot}"
+        if topic not in existing:
+            topics.append(topic)
+    return topics
+
+
+
 # قائمة بديلة محلية تستخدم لو فشل Groq
 FALLBACK_TOPICS = [
     "لماذا لا نشعر بدوران الأرض رغم سرعتها الهائلة؟",
@@ -122,7 +162,13 @@ def generate_topics_with_groq() -> List[str]:
 
     new_topics = [line.strip(" -\t") for line in content.splitlines() if line.strip()]
     used_set = set(used)
-    new_topics = [t for t in new_topics if t not in used_set]
+    unique_topics = []
+    seen = set(used_set)
+    for topic in new_topics:
+        if topic not in seen and not is_story_topic(topic):
+            unique_topics.append(topic)
+            seen.add(topic)
+    new_topics = unique_topics
 
     if not new_topics:
         print("تحذير: Groq لم يعد مواضيع صالحة بعد فلترة المستخدمة", file=sys.stderr)
@@ -132,27 +178,63 @@ def generate_topics_with_groq() -> List[str]:
 
 
 def ensure_topics_available() -> List[str]:
-    """يتأكد إن topics.txt فيه مواضيع، ولو لأ يولّد جديد تلقائي (أو يستخدم fallback)."""
+    """Refresh the queue without repeating used topics and always keep story episodes queued."""
+    used = read_used_topics()
+    used_set = set(used)
     lines = []
     if os.path.exists(TOPICS_FILE):
         with open(TOPICS_FILE, "r", encoding="utf-8") as f:
-            lines = [line.strip() for line in f if line.strip()]
+            raw_lines = [line.strip() for line in f if line.strip()]
+        seen = set()
+        for topic in raw_lines:
+            if topic not in used_set and topic not in seen:
+                lines.append(topic)
+                seen.add(topic)
 
-    if lines:
-        return lines
+    if not lines:
+        print("قائمة المواضيع فاضية أو استُخدمت بالكامل؛ جاري محاولة توليد أفكار جديدة...")
+        new_topics = generate_topics_with_groq()
+        new_topics = [topic for topic in new_topics if topic not in used_set and not is_story_topic(topic)]
 
-    print("قائمة المواضيع فاضية، جاري محاولة توليد مواضيع جديدة عبر Groq...")
-    new_topics = generate_topics_with_groq()
+        if not new_topics:
+            print("Groq لم يوفر مواضيع جديدة؛ جاري استخدام القائمة المحلية البديلة.", file=sys.stderr)
+            new_topics = []
+            seen_fallback = set(used_set)
+            for topic in FALLBACK_TOPICS:
+                if topic not in seen_fallback:
+                    new_topics.append(topic)
+                    seen_fallback.add(topic)
 
-    if not new_topics:
-        print("استخدام قائمة مواضيع محلية (fallback) لأن Groq لم يعد مواضيع صالحة أو فشل.", file=sys.stderr)
-        new_topics = FALLBACK_TOPICS.copy()
+        if not new_topics:
+            raise RuntimeError(
+                "كل المواضيع المحلية البديلة استُخدمت وGroq لم يوفر مواضيع جديدة. "
+                "أضف أفكارًا جديدة إلى topics.txt أو تحقق من حصة GROQ_API_KEY."
+            )
+        lines.extend(new_topics)
+
+    # The informational-topic generator intentionally excludes stories, so add fresh
+    # Omar and Salma episodes whenever the queue does not already contain three.
+    story_count = sum(1 for topic in lines if is_story_topic(topic))
+    if story_count < 3:
+        fresh_stories = build_next_story_topics(used + lines)
+        needed = 3 - story_count
+        existing = set(lines)
+        for topic in fresh_stories:
+            if topic not in existing:
+                lines.append(topic)
+                existing.add(topic)
+                needed -= 1
+            if needed <= 0:
+                break
+
+    if not lines:
+        raise RuntimeError("لا توجد مواضيع متاحة بعد إزالة العناوين المستخدمة.")
 
     with open(TOPICS_FILE, "w", encoding="utf-8") as f:
-        f.write("\n".join(new_topics) + "\n")
+        f.write("\n".join(lines) + "\n")
 
-    print(f"تم تحديد {len(new_topics)} موضوع وحفظهم في {TOPICS_FILE}")
-    return new_topics
+    print(f"تم تجهيز {len(lines)} موضوعًا في {TOPICS_FILE}، منها {sum(1 for x in lines if is_story_topic(x))} حلقات قصة.")
+    return lines
 
 
 def main():
@@ -169,9 +251,6 @@ def main():
         return
 
     lines = ensure_topics_available()
-
-    def is_story_topic(value: str) -> bool:
-        return value.strip().startswith("سلسلة:")
 
     used = read_used_topics()
     last_types = [is_story_topic(x) for x in used[-2:]]
