@@ -46,6 +46,7 @@ class MetadataTests(unittest.TestCase):
         self.assertIn("#Shorts", data["description"])
         self.assertTrue(data["tags"])
         self.assertIn(data["category_id"], {"27", "28"})
+        self.assertIs(data["contains_synthetic_media"], False)
 
     def test_history_topic_uses_history_hashtags(self):
         data = metadata_module.finalize_metadata(
