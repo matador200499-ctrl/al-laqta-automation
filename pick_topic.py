@@ -13,6 +13,7 @@ import json
 import urllib.request
 import urllib.error
 import random
+import re
 from typing import List, Optional
 
 TOPICS_FILE = "topics.txt"
@@ -214,10 +215,13 @@ def ensure_topics_available() -> List[str]:
 
     # The informational-topic generator intentionally excludes stories, so add fresh
     # Omar and Salma episodes whenever the queue does not already contain three.
-    story_count = sum(1 for topic in lines if is_story_topic(topic))
-    if story_count < 3:
+    preferred_story_count = sum(
+        1 for topic in lines
+        if re.search(r"^سلسلة\\s*:\\s*عمر\\s*و\\s*سلمى\\s*\\|", topic)
+    )
+    if preferred_story_count < 3:
         fresh_stories = build_next_story_topics(used + lines)
-        needed = 3 - story_count
+        needed = 3 - preferred_story_count
         existing = set(lines)
         for topic in fresh_stories:
             if topic not in existing:
@@ -238,18 +242,6 @@ def ensure_topics_available() -> List[str]:
 
 
 def main():
-    # Temporary one-shot caption-repair render for the already published Faris and Salma episode.
-    # This branch is only used by the temporary push trigger and never consumes the queue.
-    if os.environ.get("GITHUB_EVENT_NAME") == "push":
-        topic = "سلسلة: فارس وسلمى | الحلقة 1 | يوم عادي انتهى برسالة غريبة"
-        github_env = os.environ.get("GITHUB_ENV")
-        if github_env:
-            with open(github_env, "a", encoding="utf-8") as f:
-                f.write("VIDEO_TOPIC=" + topic + chr(10))
-        print("وضع إصلاح الكتابة: إعادة إنتاج فارس وسلمى الحلقة الأولى فقط.")
-        print(f"الموضوع المختار: {topic}")
-        return
-
     lines = ensure_topics_available()
 
     used = read_used_topics()
@@ -259,6 +251,13 @@ def main():
     want_story = len(last_types) >= 2 and last_types[-1] is False and last_types[-2] is False
 
     story_topics = [x for x in lines if is_story_topic(x)]
+    # Prefer the user's established Omar and Salma series when a story is due.
+    preferred_stories = [
+        x for x in story_topics
+        if re.search(r"^سلسلة\\s*:\\s*عمر\\s*و\\s*سلمى\\s*\\|", x)
+    ]
+    if preferred_stories:
+        story_topics = preferred_stories + [x for x in story_topics if x not in preferred_stories]
     knowledge_topics = [x for x in lines if not is_story_topic(x)]
 
     if want_story and story_topics:
