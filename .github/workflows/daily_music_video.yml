@@ -63,12 +63,37 @@ jobs:
           python -m pip install --upgrade pip
           pip install requests google-api-python-client google-auth google-auth-httplib2 google-auth-oauthlib
 
+      - name: Check Python syntax
+        run: python -m compileall -q scripts/create_free_music_video.py scripts/upload_youtube.py
+
       - name: Assemble vertical music video
         env:
           PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
           SONG_TITLE: ${{ inputs.song_title }}
           SONG_THEME: ${{ inputs.song_theme }}
         run: python scripts/create_free_music_video.py
+
+      - name: Validate music video and upload metadata
+        run: |
+          python - <<'PY'
+          import json
+          import subprocess
+          from pathlib import Path
+          video = Path("final_music_video.mp4")
+          content = json.loads(Path("content.json").read_text(encoding="utf-8"))
+          assert video.is_file() and video.stat().st_size > 0, "Missing final music video"
+          assert content.get("title", "").strip(), "Missing song title"
+          assert content.get("description", "").strip(), "Missing song description"
+          assert "#" in content["description"], "Missing hashtags in song description"
+          assert content.get("category_id") == "10", "Music upload must use the Music category"
+          assert isinstance(content.get("tags"), list) and content["tags"], "Missing song tags"
+          duration = float(subprocess.run(
+              ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+               "-of", "default=noprint_wrappers=1:nokey=1", str(video)],
+              check=True, capture_output=True, text=True
+          ).stdout.strip())
+          print("Validated music video metadata; duration {:.2f}s".format(duration))
+          PY
 
       - name: Save video preview artifact
         uses: actions/upload-artifact@v4
