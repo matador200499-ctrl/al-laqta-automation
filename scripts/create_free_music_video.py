@@ -144,7 +144,7 @@ def main():
         "-shortest", "-movflags", "+faststart", "final_music_video.mp4",
     ])
 
-    music_hashtags = ["#اللقطة", "#أغاني_مصرية", "#أغاني_عربية", "#موسيقى"]
+    music_hashtags = ["#اللقطة", "#أغاني_مصرية", "#أغاني_عربية", "#موسيقى", "#موسيقى_بالذكاء_الاصطناعي"]
     if any(word in SONG_THEME for word in ("رومانسي", "حب", "عاطفي", "حنين", "عمر وسلمى", "عمر وسلما")):
         music_hashtags.insert(3, "#أغاني_رومانسية")
     # Never label a longer music video as a Short.
@@ -155,6 +155,7 @@ def main():
         "description": (
             "🎵 " + SONG_TITLE + "\n\n"
             + "أغنية عربية أصلية من قناة اللقطة.\n"
+            + "تم توليد الأغنية بمساعدة الذكاء الاصطناعي.\n"
             + "موضوع الأغنية: " + SONG_THEME + ".\n\n"
             + "❤️ لو الأغنية عجبتك، اعمل إعجاب واكتب لنا رأيك في التعليقات.\n\n"
             + " ".join(music_hashtags)
