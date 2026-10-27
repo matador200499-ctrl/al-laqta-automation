@@ -272,6 +272,89 @@ def build_faris_salma_episode_one() -> dict:
     }
 
 
+def finalize_metadata(topic: str, data: dict, is_story: bool) -> dict:
+    """Create a topic-specific YouTube description, hashtags, tags, and category."""
+    title = re.sub(r"\\s+", " ", str(data.get("title") or "حلقة جديدة من اللقطة")).strip()
+    scenes = data.get("scenes") or []
+    narration = re.sub(r"\\s+", " ", str(scenes[0].get("narration", ""))).strip() if scenes else ""
+    opening_parts = [
+        part.strip()
+        for part in re.split(r"(?<=[.!?؟؛])\\s+", narration)
+        if part.strip()
+    ]
+    hook = opening_parts[0] if opening_parts else topic.strip()
+    if len(hook) > 180:
+        hook = hook[:177].rsplit(" ", 1)[0] + "…"
+
+    lowered = topic.casefold()
+    category_id = "24" if is_story else "27"
+    hashtags = ["#اللقطة"]
+    if is_story:
+        episode_info = parse_episode(topic)
+        series = str(episode_info.get("series", "")).strip()
+        series_tag = re.sub(r"[^\\w\\u0600-\\u06FF]+", "_", series, flags=re.UNICODE).strip("_")
+        hashtags.extend(["#قصص_مصرية", "#حكايات"])
+        if series_tag and series_tag not in ("قصة_لم_تنته", "قصة_لم_تنتهِ"):
+            hashtags.append("#" + series_tag)
+        hashtags.append("#Shorts")
+        tags = ["اللقطة", "قصص مصرية", "حكايات", "دراما", "قصص قصيرة"]
+        if series and series not in tags:
+            tags.insert(1, series)
+        description = (
+            f"🎬 {title}\\n\\n"
+            f"{hook}\\n\\n"
+            f"في الحلقة دي من حكايات اللقطة، كل تفصيلة ممكن تغيّر مجرى الأحداث. "
+            f"اتفرّج للنهاية واكتب لنا توقعك في التعليقات.\\n\\n"
+            f"تابع القناة عشان توصلك الحلقات الجديدة.\\n\\n"
+            + " ".join(hashtags)
+        )
+    else:
+        if any(word in lowered for word in ("فضاء", "الكون", "كوكب", "الأرض", "المريخ", "القمر", "نجوم", "ثقب أسود", "ناسا")):
+            niche_hashtags = ["#الفضاء", "#الكون"]
+            category_id = "28"
+            topic_tags = ["فضاء", "الكون", "علوم فلكية"]
+        elif any(word in lowered for word in ("تاريخ", "حضارة", "فرعون", "الفراعنة", "مصر القديمة", "أثري", "آثار", "سرابيوم", "اختراع", "اختراعات")):
+            niche_hashtags = ["#التاريخ", "#حقائق_تاريخية"]
+            topic_tags = ["تاريخ", "حقائق تاريخية", "حضارات"]
+        elif any(word in lowered for word in ("ذكاء اصطناعي", "تكنولوجيا", "تقنية", "خوارزميات", "إنترنت", "الكتروني", "إلكتروني", "أمن سيبراني", "روبوت", "كمبيوتر")):
+            niche_hashtags = ["#تكنولوجيا", "#ذكاء_اصطناعي"] if any(word in lowered for word in ("ذكاء اصطناعي", "خوارزميات", "روبوت")) else ["#تكنولوجيا", "#أمن_رقمي"]
+            category_id = "28"
+            topic_tags = ["تكنولوجيا", "تقنية", "ذكاء اصطناعي"]
+        elif any(word in lowered for word in ("خوف", "الدماغ", "العقل", "النفس", "مشاعر", "ذاكرة", "ديجافو", "السلوك", "جسمك")):
+            niche_hashtags = ["#علم_النفس", "#جسم_الإنسان"]
+            topic_tags = ["علم النفس", "الدماغ", "جسم الإنسان"]
+        elif any(word in lowered for word in ("لغز", "ألغاز", "سر", "أسرار", "أغرب", "غرائب", "ماذا لو", "لماذا")):
+            niche_hashtags = ["#غرائب", "#معلومات_مذهلة"]
+            topic_tags = ["غرائب", "ألغاز", "حقائق غريبة"]
+        else:
+            niche_hashtags = ["#علوم", "#معلومات_مذهلة"]
+            topic_tags = ["علوم", "معلومات علمية", "حقائق"]
+        hashtags.extend(niche_hashtags)
+        hashtags.extend(["#حقائق", "#Shorts"])
+        tags = ["اللقطة", "معلومات", "حقائق"] + topic_tags
+        description = (
+            f"🔎 {hook}\\n\\n"
+            f"في الفيديو ده من قناة اللقطة بنشرح موضوع «{topic.strip()}» بطريقة بسيطة ومشوقة، "
+            f"ونقرب لك أهم التفاصيل والمعلومات اللي تستحق تعرفها.\\n\\n"
+            f"💬 إيه أكتر معلومة فاجأتك؟ اكتب لنا في التعليقات، وتابع القناة لمزيد من الفيديوهات.\\n\\n"
+            + " ".join(hashtags)
+        )
+
+    unique_tags = []
+    for tag in tags:
+        tag = str(tag).strip()
+        if tag and tag not in unique_tags:
+            unique_tags.append(tag)
+    data["title"] = title[:100]
+    return {
+        "title": data["title"],
+        "description": description,
+        "tags": unique_tags[:8],
+        "hashtags": hashtags,
+        "category_id": category_id,
+    }
+
+
 def main():
     api_key = os.environ.get("GROQ_API_KEY")
     if not api_key:
@@ -287,8 +370,13 @@ def main():
         data = generate_with_retry(client, build_prompt(topic), is_story)
 
     content_type = "story" if topic.strip().startswith("سلسلة:") else "knowledge"
+    metadata = finalize_metadata(topic, data, is_story)
     script = {"topic": topic, "content_type": content_type, "scenes": data["scenes"]}
-    content = {"title": data["title"], "description": data["description"], "tags": data["tags"]}
+    content = {
+        **metadata,
+        "topic": topic,
+        "content_type": content_type,
+    }
 
     os.makedirs("output", exist_ok=True)
     with open("script.json", "w", encoding="utf-8") as file:
