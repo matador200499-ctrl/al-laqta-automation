@@ -144,14 +144,22 @@ def main():
         "-shortest", "-movflags", "+faststart", "final_music_video.mp4",
     ])
 
+    music_hashtags = ["#اللقطة", "#أغاني_مصرية", "#أغاني_عربية", "#موسيقى", "#Shorts"]
+    if any(word in SONG_THEME for word in ("رومانسي", "حب", "عاطفي", "حنين", "عمر وسلمى", "عمر وسلما")):
+        music_hashtags.insert(3, "#أغاني_رومانسية")
     content = {
         "title": SONG_TITLE[:90],
         "description": (
-            "أغنية مصرية أصلية بعنوان: {}.\n".format(SONG_TITLE)
-            + "الموضوع: {}.\n".format(SONG_THEME)
-            + "الموسيقى مولدة باستخدام ACE-Step 1.5، وتم تركيب الفيديو بمشاهد مرخصة من Pexels."
+            "🎵 " + SONG_TITLE + "\\n\\n"
+            + "أغنية عربية أصلية من قناة اللقطة.\\n"
+            + "موضوع الأغنية: " + SONG_THEME + ".\\n\\n"
+            + "❤️ لو الأغنية عجبتك، اعمل إعجاب واكتب لنا رأيك في التعليقات.\\n\\n"
+            + " ".join(music_hashtags)
         ),
-        "tags": ["أغاني", "أغاني مصرية", "أغاني عربية", "موسيقى", "كليب", "أغاني جديدة", "ACE-Step"],
+        "tags": ["أغاني", "أغاني مصرية", "أغاني عربية", "موسيقى", "كليب", "أغاني جديدة", "موسيقى رومانسية", "ACE-Step"],
+        "hashtags": music_hashtags,
+        "category_id": "10",
+        "content_type": "music",
     }
     (ROOT / "content.json").write_text(json.dumps(content, ensure_ascii=False, indent=2), encoding="utf-8")
     print("Free music video assembled successfully.", flush=True)
