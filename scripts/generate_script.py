@@ -352,6 +352,8 @@ def finalize_metadata(topic: str, data: dict, is_story: bool) -> dict:
         "tags": unique_tags[:8],
         "hashtags": hashtags,
         "category_id": category_id,
+        # These videos use stock footage and narration, not realistic AI-generated scenes.
+        "contains_synthetic_media": False,
     }
 
 
