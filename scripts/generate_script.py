@@ -274,12 +274,12 @@ def build_faris_salma_episode_one() -> dict:
 
 def finalize_metadata(topic: str, data: dict, is_story: bool) -> dict:
     """Create a topic-specific YouTube description, hashtags, tags, and category."""
-    title = re.sub(r"\\s+", " ", str(data.get("title") or "حلقة جديدة من اللقطة")).strip()
+    title = re.sub(r"\s+", " ", str(data.get("title") or "حلقة جديدة من اللقطة")).strip()
     scenes = data.get("scenes") or []
-    narration = re.sub(r"\\s+", " ", str(scenes[0].get("narration", ""))).strip() if scenes else ""
+    narration = re.sub(r"\s+", " ", str(scenes[0].get("narration", ""))).strip() if scenes else ""
     opening_parts = [
         part.strip()
-        for part in re.split(r"(?<=[.!?؟؛])\\s+", narration)
+        for part in re.split(r"(?<=[.!?؟؛])\s+", narration)
         if part.strip()
     ]
     hook = opening_parts[0] if opening_parts else topic.strip()
@@ -292,7 +292,7 @@ def finalize_metadata(topic: str, data: dict, is_story: bool) -> dict:
     if is_story:
         episode_info = parse_episode(topic)
         series = str(episode_info.get("series", "")).strip()
-        series_tag = re.sub(r"[^\\w\\u0600-\\u06FF]+", "_", series, flags=re.UNICODE).strip("_")
+        series_tag = re.sub(r"[^\w\u0600-\u06FF]+", "_", series, flags=re.UNICODE).strip("_")
         hashtags.extend(["#قصص_مصرية", "#حكايات"])
         if series_tag and series_tag not in ("قصة_لم_تنته", "قصة_لم_تنتهِ"):
             hashtags.append("#" + series_tag)
@@ -301,11 +301,11 @@ def finalize_metadata(topic: str, data: dict, is_story: bool) -> dict:
         if series and series not in tags:
             tags.insert(1, series)
         description = (
-            f"🎬 {title}\\n\\n"
-            f"{hook}\\n\\n"
+            f"🎬 {title}\n\n"
+            f"{hook}\n\n"
             f"في الحلقة دي من حكايات اللقطة، كل تفصيلة ممكن تغيّر مجرى الأحداث. "
-            f"اتفرّج للنهاية واكتب لنا توقعك في التعليقات.\\n\\n"
-            f"تابع القناة عشان توصلك الحلقات الجديدة.\\n\\n"
+            f"اتفرّج للنهاية واكتب لنا توقعك في التعليقات.\n\n"
+            f"تابع القناة عشان توصلك الحلقات الجديدة.\n\n"
             + " ".join(hashtags)
         )
     else:
@@ -333,10 +333,10 @@ def finalize_metadata(topic: str, data: dict, is_story: bool) -> dict:
         hashtags.extend(["#حقائق", "#Shorts"])
         tags = ["اللقطة", "معلومات", "حقائق"] + topic_tags
         description = (
-            f"🔎 {hook}\\n\\n"
+            f"🔎 {hook}\n\n"
             f"في الفيديو ده من قناة اللقطة بنشرح موضوع «{topic.strip()}» بطريقة بسيطة ومشوقة، "
-            f"ونقرب لك أهم التفاصيل والمعلومات اللي تستحق تعرفها.\\n\\n"
-            f"💬 إيه أكتر معلومة فاجأتك؟ اكتب لنا في التعليقات، وتابع القناة لمزيد من الفيديوهات.\\n\\n"
+            f"ونقرب لك أهم التفاصيل والمعلومات اللي تستحق تعرفها.\n\n"
+            f"💬 إيه أكتر معلومة فاجأتك؟ اكتب لنا في التعليقات، وتابع القناة لمزيد من الفيديوهات.\n\n"
             + " ".join(hashtags)
         )
 
