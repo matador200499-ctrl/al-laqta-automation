@@ -1,6 +1,7 @@
 import importlib.util
 import unittest
 from pathlib import Path
+import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -15,6 +16,17 @@ def load_module(name, relative_path):
 
 metadata_module = load_module("generate_script_for_test", "scripts/generate_script.py")
 assembly_module = load_module("assemble_video_for_test", "scripts/assemble_video.py")
+
+
+class WorkflowSyntaxTests(unittest.TestCase):
+    def test_all_github_workflow_yaml_files_parse(self):
+        workflow_dir = ROOT / ".github" / "workflows"
+        workflow_files = sorted(workflow_dir.glob("*.yml"))
+        self.assertTrue(workflow_files, "No GitHub Actions workflow files found")
+        for path in workflow_files:
+            with self.subTest(workflow=path.name):
+                parsed = yaml.safe_load(path.read_text(encoding="utf-8"))
+                self.assertIsInstance(parsed, dict)
 
 
 class MetadataTests(unittest.TestCase):
