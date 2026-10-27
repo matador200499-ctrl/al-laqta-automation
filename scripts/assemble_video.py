@@ -146,40 +146,93 @@ def make_overlay_png(text: str, out_path: str):
     img.save(out_path)
 
 
-def prepare_scene(i: int, duration: float):
+def split_caption_chunks(text: str, max_words: int = 6):
+    """Split narration into short exact Arabic subtitle phrases."""
+    words = re.sub(r"\\s+", " ", str(text)).strip().split()
+    return [" ".join(words[i:i + max_words]) for i in range(0, len(words), max_words)]
+
+
+def caption_cues(text: str, duration: float):
+    """Approximate caption timing using phrase length and the measured scene audio duration."""
+    chunks = split_caption_chunks(text)
+    if not chunks:
+        return []
+    weights = [max(1, len(chunk.replace(" ", ""))) for chunk in chunks]
+    total_weight = sum(weights)
+    active_duration = max(0.1, duration - min(0.25, duration * 0.04))
+    cues = []
+    position = 0.0
+    for index, (chunk, weight) in enumerate(zip(chunks, weights)):
+        start = position
+        if index == len(chunks) - 1:
+            end = duration
+        else:
+            end = active_duration * sum(weights[:index + 1]) / total_weight
+        end = max(start + 0.15, end)
+        cues.append({"text": chunk, "start": start, "end": min(duration, end)})
+        position = end
+    return cues
+
+
+def srt_timestamp(seconds: float) -> str:
+    milliseconds = max(0, int(round(seconds * 1000)))
+    hours, remainder = divmod(milliseconds, 3_600_000)
+    minutes, remainder = divmod(remainder, 60_000)
+    secs, millis = divmod(remainder, 1000)
+    return "{:02d}:{:02d}:{:02d},{:03d}".format(hours, minutes, secs, millis)
+
+
+def prepare_scene(i: int, duration: float, caption_assets: list[dict]):
     clip_in = f"clips/scene_{i}.mp4"
-    # تنويع اللقطات مع الحفاظ على نفس الأشخاص: كل مشهد يأخذ قصّة/زوم مختلفة
-    # من نفس الفيديو الأساسي بدل تكرار نفس الكادر حرفيًا.
+    # تنويع قصّة الفيديو قليلًا، مع الحفاظ على مقاس رأسي ثابت.
     zooms = [1.00, 1.06, 1.12, 1.04, 1.10, 1.02]
     x_offsets = [0.50, 0.38, 0.62, 0.45, 0.56, 0.32]
     y_offsets = [0.50, 0.45, 0.55, 0.48, 0.52, 0.44]
     zoom = zooms[i % len(zooms)]
     xoff = x_offsets[i % len(x_offsets)]
     yoff = y_offsets[i % len(y_offsets)]
-    overlay_png = f"overlays/scene_{i}.png"
     scene_out = f"segments/scene_{i}.mp4"
 
     if not os.path.exists(clip_in):
-        # لو المقطع مفقود، اعمل خلفية سودة بديلة بنفس المدة
+        # لا نترك المونتاج ينهار لو غاب مقطع؛ ننشئ خلفية بديلة مؤقتة.
+        clip_in = f"segments_tmp/scene_{i}.mp4"
         run([
-            "ffmpeg", "-y", "-f", "lavfi", "-i", f"color=c=black:s={WIDTH}x{HEIGHT}:d={duration}",
-            "-c:v", "libx264", "-pix_fmt", "yuv420p", clip_in.replace("clips", "segments_tmp"),
+            "ffmpeg", "-y", "-f", "lavfi", "-i",
+            f"color=c=black:s={WIDTH}x{HEIGHT}:d={duration}",
+            "-r", "25", "-c:v", "libx264", "-pix_fmt", "yuv420p", clip_in,
         ])
-        clip_in = clip_in.replace("clips", "segments_tmp")
 
-    # يقص/يكرر المقطع عشان يطابق مدة الصوت بالظبط، ويحوّله لمقاس موحد
-    run([
-        "ffmpeg", "-y",
-        "-stream_loop", "-1", "-i", clip_in,
-        "-i", overlay_png,
-        "-filter_complex",
+    command = ["ffmpeg", "-y", "-stream_loop", "-1", "-i", clip_in]
+    for caption in caption_assets:
+        command.extend([
+            "-loop", "1", "-framerate", "25", "-t", str(duration),
+            "-i", caption["path"],
+        ])
+
+    filters = [
         f"[0:v]scale=ceil({WIDTH}*{zoom}/2)*2:ceil({HEIGHT}*{zoom}/2)*2:force_original_aspect_ratio=increase,"
         f"crop={WIDTH}:{HEIGHT}:(iw-{WIDTH})*{xoff}:(ih-{HEIGHT})*{yoff},"
-        f"setsar=1[bg];[bg][1:v]overlay=0:0[outv]",
-        "-map", "[outv]", "-t", str(duration),
-        "-an", "-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
+        "setsar=1,fps=25,format=yuv420p[bg]"
+    ]
+    last_label = "bg"
+    for index, caption in enumerate(caption_assets, start=1):
+        output_label = f"captioned{index}"
+        start = max(0.0, float(caption["start"]))
+        end = min(duration, float(caption["end"]))
+        filters.append(
+            f"[{last_label}][{index}:v]overlay=0:0:"
+            f"enable='between(t,{start:.3f},{end:.3f})'[{output_label}]"
+        )
+        last_label = output_label
+
+    command.extend([
+        "-filter_complex", ";".join(filters),
+        "-map", f"[{last_label}]", "-t", str(duration),
+        "-an", "-r", "25", "-c:v", "libx264", "-preset", "veryfast",
+        "-crf", "23", "-pix_fmt", "yuv420p", "-movflags", "+faststart",
         scene_out,
     ])
+    run(command)
     return scene_out
 
 
@@ -194,10 +247,33 @@ def main():
     os.makedirs("segments_tmp", exist_ok=True)
 
     scene_files = []
+    subtitle_entries = []
+    global_offset = 0.0
     for i, scene in enumerate(script["scenes"]):
-        make_overlay_png(scene["onscreen_text"], f"overlays/scene_{i}.png")
-        scene_out = prepare_scene(i, durations[i])
+        narration = str(scene.get("narration", "")).strip()
+        if not narration:
+            raise RuntimeError(f"المشهد {i + 1} لا يحتوي على نص ترجمة.")
+        cues = caption_cues(narration, float(durations[i]))
+        caption_assets = []
+        for j, cue in enumerate(cues):
+            caption_path = f"overlays/scene_{i}_caption_{j}.png"
+            make_overlay_png(cue["text"], caption_path)
+            caption_assets.append({"path": caption_path, **cue})
+            subtitle_entries.append(
+                "{}\\n{} --> {}\\n{}\\n".format(
+                    len(subtitle_entries) + 1,
+                    srt_timestamp(global_offset + cue["start"]),
+                    srt_timestamp(global_offset + cue["end"]),
+                    cue["text"],
+                )
+            )
+        scene_out = prepare_scene(i, float(durations[i]), caption_assets)
         scene_files.append(scene_out)
+        global_offset += float(durations[i])
+
+    # نحفظ ترجمة عربية كاملة بصيغة SRT، بالإضافة إلى ظهورها متزامنة داخل الفيديو.
+    with open("captions_ar.srt", "w", encoding="utf-8-sig") as subtitle_file:
+        subtitle_file.write("\\n".join(subtitle_entries))
 
     # 1) لزق كل مقاطع الفيديو مع بعض
     with open("segments/concat_list.txt", "w") as f:
