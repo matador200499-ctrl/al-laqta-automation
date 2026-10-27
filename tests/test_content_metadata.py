@@ -49,7 +49,7 @@ class TopicRotationTests(unittest.TestCase):
                 "سلسلة: عمر وسلمى | الحلقة 3 | القرار اللي غيّر كل حاجة",
             ]
             topics_path.write_text("", encoding="utf-8")
-            used_path.write_text("\\n".join(used_history) + "\\n", encoding="utf-8")
+            used_path.write_text("\n".join(used_history) + "\n", encoding="utf-8")
             topic_module.TOPICS_FILE = str(topics_path)
             topic_module.USED_FILE = str(used_path)
             topic_module.generate_topics_with_groq = lambda: [
