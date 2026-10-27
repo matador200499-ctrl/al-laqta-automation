@@ -13,6 +13,11 @@ on:
         required: false
         type: string
         default: "أغنية مصرية أصلية"
+      dry_run:
+        description: "تشغيل تجريبي: جهّز المعاينة فقط دون نشرها على يوتيوب"
+        required: false
+        type: boolean
+        default: false
 
 concurrency:
   group: free-music-video
@@ -105,7 +110,12 @@ jobs:
             content.json
           retention-days: 7
 
+      - name: Explain dry run result
+        if: ${{ inputs.dry_run == true }}
+        run: echo "Dry run complete. The video and metadata are saved as an artifact; no YouTube upload was attempted."
+
       - name: Upload music video to YouTube
+        if: ${{ inputs.dry_run != true }}
         env:
           YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
           YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
