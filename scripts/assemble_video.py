@@ -148,7 +148,7 @@ def make_overlay_png(text: str, out_path: str):
 
 def split_caption_chunks(text: str, max_words: int = 6):
     """Split narration into short exact Arabic subtitle phrases."""
-    words = re.sub(r"\\s+", " ", str(text)).strip().split()
+    words = re.sub(r"\s+", " ", str(text)).strip().split()
     return [" ".join(words[i:i + max_words]) for i in range(0, len(words), max_words)]
 
 
