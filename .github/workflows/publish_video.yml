@@ -6,6 +6,11 @@ on:
     # UTC: 00:00, 03:00, 06:00, 09:00, 12:00, 15:00, 18:00, 21:00
     - cron: "0 0,3,6,9,12,15,18,21 * * *"
   workflow_dispatch:
+    inputs:
+      manual_topic:
+        description: "موضوع فيديو يدوي (اتركه فارغًا لاستخدام قائمة المواضيع)"
+        required: false
+        type: string
 
 # يمنع تشغيل نسختين من النشر في نفس الوقت،
 # وبالتالي لا يمكن لتشغيلين قراءة نفس topics.txt وإنتاج نفس الفيديو.
@@ -36,7 +41,19 @@ jobs:
           pip install -U pip
           pip install groq edge-tts gTTS moviepy==1.0.3 requests Pillow arabic-reshaper python-bidi google-api-python-client google-auth-httplib2 google-auth-oauthlib
 
+      - name: Check Python syntax
+        run: python -m compileall -q scripts pick_topic.py
+
+      - name: Prepare a manually supplied topic
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.manual_topic != '' }}
+        env:
+          MANUAL_TOPIC: ${{ inputs.manual_topic }}
+        run: |
+          printf '%s\\n' "$MANUAL_TOPIC" > manual_topic.txt
+          echo "Using a manually supplied topic; the topic queue will not be consumed."
+
       - name: Pick next topic
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.manual_topic == '' }}
         env:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
         run: python pick_topic.py
@@ -46,8 +63,22 @@ jobs:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
         run: python scripts/generate_script.py
 
-      - name: Validate generated files
-        run: python -c 'import json; s=json.load(open("script.json", encoding="utf-8")); c=json.load(open("content.json", encoding="utf-8")); assert s.get("scenes") and c.get("title"); print("Validated {} scenes".format(len(s["scenes"])))'
+      - name: Validate generated script and YouTube metadata
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          script = json.loads(Path("script.json").read_text(encoding="utf-8"))
+          content = json.loads(Path("content.json").read_text(encoding="utf-8"))
+          assert script.get("topic"), "Missing video topic"
+          assert isinstance(script.get("scenes"), list) and script["scenes"], "Missing scenes"
+          assert content.get("title", "").strip(), "Missing YouTube title"
+          assert content.get("description", "").strip(), "Missing YouTube description"
+          assert isinstance(content.get("tags"), list) and content["tags"], "Missing YouTube tags"
+          assert content.get("category_id") in {"10", "22", "23", "24", "25", "26", "27", "28"}, "Missing or invalid YouTube category"
+          assert "#" in content["description"], "Missing hashtags in YouTube description"
+          print("Validated {} scenes and YouTube metadata for: {}".format(len(script["scenes"]), script["topic"]))
+          PY
 
       - name: Generate voice
         run: python scripts/generate_voice.py
