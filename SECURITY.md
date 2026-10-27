@@ -1,21 +1,13 @@
-# Security Policy
+# Security Policy — Al Laqta Automation
 
-## Supported Versions
+## التعامل مع الأسرار
 
-Use this section to tell people about which versions of your project are
-currently being supported with security updates.
+- لا تضع مفاتيح API أو ملفات OAuth أو رموز التحديث داخل ملفات المشروع.
+- استخدم GitHub **Settings → Secrets and variables → Actions** لتخزين `GROQ_API_KEY` و`PEXELS_API_KEY` وبيانات YouTube.
+- ملفات `client_secret*.json` و`client_secrets*.json` وملفات `.env` يجب أن تظل على جهازك ولا تُرفع إلى المستودع.
+- المستودع Public. الملفات العادية التي تُضاف إليه (ومنها الأغاني في `music_input/song.mp3`) يمكن للجميع تنزيلها.
+- إذا رُفع مفتاح أو رمز دخول بالخطأ، اعتبره مكشوفًا: ألغِه أو جدّده فورًا من مزوّد الخدمة، ثم أزل النسخة المكشوفة من المستودع والتاريخ عند الحاجة. حذف الملف وحده لا يبطل المفتاح.
 
-| Version | Supported          |
-| ------- | ------------------ |
-| 5.1.x   | :white_check_mark: |
-| 5.0.x   | :x:                |
-| 4.0.x   | :white_check_mark: |
-| < 4.0   | :x:                |
+## الإبلاغ عن مشكلة أمنية
 
-## Reporting a Vulnerability
-
-Use this section to tell people how to report a vulnerability.
-
-Tell them where to go, how often they can expect to get an update on a
-reported vulnerability, what to expect if the vulnerability is accepted or
-declined, etc.
+لا تنشر الأسرار أو تفاصيل قابلة للاستغلال في issue عام. استخدم قناة تواصل خاصة مع مالك المستودع، وأرفق الحد الأدنى من التفاصيل اللازمة لإعادة إنتاج المشكلة.
