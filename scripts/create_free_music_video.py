@@ -163,6 +163,8 @@ def main():
         "hashtags": music_hashtags,
         "category_id": "10",
         "content_type": "music",
+        # YouTube requires disclosure when AI-generated music is the main focus.
+        "contains_synthetic_media": True,
     }
     (ROOT / "content.json").write_text(json.dumps(content, ensure_ascii=False, indent=2), encoding="utf-8")
     print("Free music video assembled successfully.", flush=True)
