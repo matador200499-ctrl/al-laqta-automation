@@ -19,3 +19,9 @@ final_video.mp4
 script.json
 content.json
 upload_result.json
+
+# Files generated locally during a run
+manual_topic.txt
+captions_ar.srt
+music_work/
+final_music_video.mp4
