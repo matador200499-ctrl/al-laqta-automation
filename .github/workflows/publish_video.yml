@@ -81,6 +81,7 @@ jobs:
           assert content.get("description", "").strip(), "Missing YouTube description"
           assert isinstance(content.get("tags"), list) and content["tags"], "Missing YouTube tags"
           assert content.get("category_id") in {"10", "22", "23", "24", "25", "26", "27", "28"}, "Missing or invalid YouTube category"
+          assert isinstance(content.get("contains_synthetic_media"), bool), "Missing synthetic-media disclosure flag"
           assert "#" in content["description"], "Missing hashtags in YouTube description"
           print("Validated {} scenes and YouTube metadata for: {}".format(len(script["scenes"]), script["topic"]))
           PY
