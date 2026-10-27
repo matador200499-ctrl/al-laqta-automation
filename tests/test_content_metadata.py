@@ -16,6 +16,59 @@ def load_module(name, relative_path):
 
 metadata_module = load_module("generate_script_for_test", "scripts/generate_script.py")
 assembly_module = load_module("assemble_video_for_test", "scripts/assemble_video.py")
+topic_module = load_module("pick_topic_for_test", "pick_topic.py")
+
+
+class TopicRotationTests(unittest.TestCase):
+    def test_fresh_omar_salma_episodes_advance_past_used_episodes(self):
+        used = [
+            "سلسلة: عمر وسلمى | الحلقة 1 | رسالة وصلت في وقت غلط",
+            "سلسلة: عمر وسلمى | الحلقة 2 | سر الصورة القديمة",
+            "سلسلة: عمر وسلمى | الحلقة 3 | القرار اللي غيّر كل حاجة",
+        ]
+        future = topic_module.build_next_story_topics(used)
+        self.assertEqual(len(future), 3)
+        self.assertTrue(future[0].startswith("سلسلة: عمر وسلمى | الحلقة 4 |"))
+        self.assertTrue(future[1].startswith("سلسلة: عمر وسلمى | الحلقة 5 |"))
+        self.assertTrue(future[2].startswith("سلسلة: عمر وسلمى | الحلقة 6 |"))
+        self.assertTrue(set(future).isdisjoint(set(used)))
+
+    def test_empty_topic_queue_refills_without_repeating_and_includes_stories(self):
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            topics_path = Path(temp_dir) / "topics.txt"
+            used_path = Path(temp_dir) / "used_topics.txt"
+            old_topics_path = topic_module.TOPICS_FILE
+            old_used_path = topic_module.USED_FILE
+            old_generator = topic_module.generate_topics_with_groq
+            used_history = [
+                "معلومة علمية سبق نشرها",
+                "سلسلة: عمر وسلمى | الحلقة 1 | رسالة وصلت في وقت غلط",
+                "سلسلة: عمر وسلمى | الحلقة 2 | سر الصورة القديمة",
+                "سلسلة: عمر وسلمى | الحلقة 3 | القرار اللي غيّر كل حاجة",
+            ]
+            topics_path.write_text("", encoding="utf-8")
+            used_path.write_text("\\n".join(used_history) + "\\n", encoding="utf-8")
+            topic_module.TOPICS_FILE = str(topics_path)
+            topic_module.USED_FILE = str(used_path)
+            topic_module.generate_topics_with_groq = lambda: [
+                "معلومة علمية سبق نشرها",
+                "موضوع علمي جديد لم يُنشر",
+            ]
+            try:
+                queue = topic_module.ensure_topics_available()
+            finally:
+                topic_module.TOPICS_FILE = old_topics_path
+                topic_module.USED_FILE = old_used_path
+                topic_module.generate_topics_with_groq = old_generator
+
+            self.assertNotIn("معلومة علمية سبق نشرها", queue)
+            self.assertIn("موضوع علمي جديد لم يُنشر", queue)
+            stories = [topic for topic in queue if topic.startswith("سلسلة: عمر وسلمى")]
+            self.assertEqual(len(stories), 3)
+            self.assertTrue(all("| الحلقة " in topic for topic in stories))
+            self.assertEqual(len(queue), len(set(queue)))
 
 
 class WorkflowSyntaxTests(unittest.TestCase):
