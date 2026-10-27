@@ -24,6 +24,6 @@ jobs:
           python -m pip install --upgrade pip
           pip install groq Pillow arabic-reshaper python-bidi PyYAML
       - name: Check Python syntax
-        run: python -m compileall -q scripts pick_topic.py tests
+        run: python -m compileall -q .
       - name: Test metadata and Arabic subtitles
         run: python -m unittest discover -s tests -v
