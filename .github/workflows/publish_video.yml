@@ -116,7 +116,7 @@ jobs:
               raise SystemExit("Video is not safely within the 3-minute Shorts limit; refusing to upload.")
           PY
 
-      - name: Save corrected-caption preview artifact
+      - name: Save video, metadata and captions preview artifact
         uses: actions/upload-artifact@v4
         with:
           name: generated-video-preview
