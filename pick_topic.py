@@ -217,7 +217,7 @@ def ensure_topics_available() -> List[str]:
     # Omar and Salma episodes whenever the queue does not already contain three.
     preferred_story_count = sum(
         1 for topic in lines
-        if re.search(r"^سلسلة\\s*:\\s*عمر\\s*و\\s*سلمى\\s*\\|", topic)
+        if re.search(r"^سلسلة\s*:\s*عمر\s*و\s*سلمى\s*\|", topic)
     )
     if preferred_story_count < 3:
         fresh_stories = build_next_story_topics(used + lines)
@@ -254,7 +254,7 @@ def main():
     # Prefer the user's established Omar and Salma series when a story is due.
     preferred_stories = [
         x for x in story_topics
-        if re.search(r"^سلسلة\\s*:\\s*عمر\\s*و\\s*سلمى\\s*\\|", x)
+        if re.search(r"^سلسلة\s*:\s*عمر\s*و\s*سلمى\s*\|", x)
     ]
     if preferred_stories:
         story_topics = preferred_stories + [x for x in story_topics if x not in preferred_stories]
