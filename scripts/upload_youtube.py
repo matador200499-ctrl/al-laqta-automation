@@ -49,7 +49,7 @@ def main():
             "title": video_title,
             "description": content.get("description", ""),
             "tags": content.get("tags", []),
-            "categoryId": "24",  # Entertainment — قصص وترفيه
+            "categoryId": str(content.get("category_id", "24")),  # حسب نوع المحتوى
         },
         "status": {
             "privacyStatus": privacy_status,  # private / unlisted / public
