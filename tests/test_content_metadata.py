@@ -33,6 +33,54 @@ class TopicRotationTests(unittest.TestCase):
         self.assertTrue(future[2].startswith("سلسلة: عمر وسلمى | الحلقة 6 |"))
         self.assertTrue(set(future).isdisjoint(set(used)))
 
+    def test_picker_chooses_story_after_two_information_videos(self):
+        import os
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            topics_path = Path(temp_dir) / "topics.txt"
+            used_path = Path(temp_dir) / "used_topics.txt"
+            github_env_path = Path(temp_dir) / "github_env.txt"
+            old_topics_path = topic_module.TOPICS_FILE
+            old_used_path = topic_module.USED_FILE
+            old_github_env = os.environ.get("GITHUB_ENV")
+            old_event_name = os.environ.get("GITHUB_EVENT_NAME")
+            topics_path.write_text(
+                "\n".join([
+                    "موضوع معلوماتي جديد أول",
+                    "موضوع معلوماتي جديد ثاني",
+                    "سلسلة: عمر وسلمى | الحلقة 4 | مكالمة من رقم مجهول",
+                    "سلسلة: عمر وسلمى | الحلقة 5 | لقاء غير متوقع في محطة القطر",
+                    "سلسلة: عمر وسلمى | الحلقة 6 | حقيقة ظهرت بعد غياب طويل",
+                ]) + "\n",
+                encoding="utf-8",
+            )
+            used_path.write_text(
+                "\n".join(["موضوع معلوماتي سابق أول", "موضوع معلوماتي سابق ثاني"]) + "\n",
+                encoding="utf-8",
+            )
+            topic_module.TOPICS_FILE = str(topics_path)
+            topic_module.USED_FILE = str(used_path)
+            os.environ["GITHUB_ENV"] = str(github_env_path)
+            os.environ.pop("GITHUB_EVENT_NAME", None)
+            try:
+                topic_module.main()
+                published_topics = used_path.read_text(encoding="utf-8").splitlines()
+            finally:
+                topic_module.TOPICS_FILE = old_topics_path
+                topic_module.USED_FILE = old_used_path
+                if old_github_env is None:
+                    os.environ.pop("GITHUB_ENV", None)
+                else:
+                    os.environ["GITHUB_ENV"] = old_github_env
+                if old_event_name is None:
+                    os.environ.pop("GITHUB_EVENT_NAME", None)
+                else:
+                    os.environ["GITHUB_EVENT_NAME"] = old_event_name
+
+            self.assertTrue(published_topics[-1].startswith("سلسلة: عمر وسلمى | الحلقة 4 |"))
+
+
     def test_fallback_after_groq_quota_uses_unused_local_ideas(self):
         import tempfile
 
