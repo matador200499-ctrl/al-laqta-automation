@@ -94,6 +94,25 @@ jobs:
       - name: Assemble video
         run: python scripts/assemble_video.py
 
+      - name: Verify final video is within the Shorts duration limit
+        run: |
+          python - <<'PY'
+          import subprocess
+          from pathlib import Path
+          video = Path("final_video.mp4")
+          if not video.is_file() or video.stat().st_size == 0:
+              raise SystemExit("Final video is missing or empty.")
+          result = subprocess.run(
+              ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+               "-of", "default=noprint_wrappers=1:nokey=1", str(video)],
+              check=True, capture_output=True, text=True
+          )
+          duration = float(result.stdout.strip())
+          print("Final video duration: {:.2f} seconds".format(duration))
+          if duration <= 0 or duration > 179.8:
+              raise SystemExit("Video is not safely within the 3-minute Shorts limit; refusing to upload.")
+          PY
+
       - name: Save corrected-caption preview artifact
         uses: actions/upload-artifact@v4
         with:
