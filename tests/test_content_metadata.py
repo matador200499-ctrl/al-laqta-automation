@@ -171,6 +171,52 @@ class MetadataTests(unittest.TestCase):
             "scenes": [{"narration": "هل تعرف إن المعلومة دي ممكن تغير نظرتك للموضوع؟"}],
         }
 
+    def test_english_narration_is_rejected_before_video_rendering(self):
+        english_scene = (
+            "Photosynthesis converts sunlight into chemical energy through chlorophyll while plants "
+            "absorb carbon dioxide and water to produce glucose and release oxygen during daytime "
+            "growth inside green leaf cells. Supporting processes continue in the natural environment."
+        )
+        data = {
+            "title": "عنوان عربي واضح",
+            "description": "وصف عربي",
+            "tags": ["اللقطة"],
+            "scenes": [
+                {"narration": english_scene, "onscreen_text": "caption", "keywords": "green plant leaves"}
+                for _ in range(9)
+            ],
+        }
+        import json
+        with self.assertRaisesRegex(ValueError, "must be Arabic"):
+            metadata_module.parse_json_response(
+                json.dumps(data, ensure_ascii=False),
+                False,
+                "كيف تعمل البطارية القابلة للشحن؟",
+            )
+
+    def test_arabic_narration_about_wrong_subject_is_rejected(self):
+        arabic_scene = (
+            "تقوم النباتات بعملية البناء الضوئي عندما تمتص أوراقها ضوء الشمس وتستخدم الماء "
+            "وثاني أكسيد الكربون لإنتاج السكر وإطلاق الأكسجين الضروري لاستمرار الحياة على كوكب "
+            "الأرض خلال النهار، وتختلف هذه العملية حسب شدة الإضاءة ودرجة الحرارة المتوفرة."
+        )
+        data = {
+            "title": "عنوان عربي واضح",
+            "description": "وصف عربي",
+            "tags": ["اللقطة"],
+            "scenes": [
+                {"narration": arabic_scene, "onscreen_text": "عنوان من النص", "keywords": "green plant leaves"}
+                for _ in range(9)
+            ],
+        }
+        import json
+        with self.assertRaisesRegex(ValueError, "does not match the requested topic"):
+            metadata_module.parse_json_response(
+                json.dumps(data, ensure_ascii=False),
+                False,
+                "كيف تعمل البطارية القابلة للشحن؟",
+            )
+
     def test_science_topic_has_description_tags_and_shorts(self):
         data = metadata_module.finalize_metadata(
             "لماذا لا نشعر بدوران الأرض رغم سرعتها الهائلة؟",
