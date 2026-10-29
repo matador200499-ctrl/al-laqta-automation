@@ -65,7 +65,77 @@ def caption_from_narration(narration: str) -> str:
     return caption or "تابع تفاصيل الحكاية"
 
 
-def parse_json_response(raw: str, is_story: bool) -> dict:
+def normalize_arabic_word(word: str) -> str:
+    """Normalize common Arabic letter variants and strip common prefixes for topic checks."""
+    word = re.sub(r"[\u064B-\u065F\u0670\u0640]", "", str(word))
+    word = word.translate(str.maketrans({
+        "أ": "ا", "إ": "ا", "آ": "ا", "ٱ": "ا",
+        "ى": "ي", "ة": "ه",
+    }))
+    for prefix in ("وال", "بال", "كال", "فال", "لل", "ال", "و", "ف", "ب", "ك", "ل"):
+        if word.startswith(prefix) and len(word) - len(prefix) >= 3:
+            word = word[len(prefix):]
+            break
+    return word
+
+
+ARABIC_TOPIC_STOPWORDS = {
+    "كيف", "تعمل", "ماذا", "لماذا", "هل", "هي", "هو", "من", "في", "عن",
+    "الي", "على", "بعد", "قبل", "كل", "شيء", "سلسله", "حلقه", "رقم",
+    "هذا", "هذه", "مع", "كان", "كانت", "جديد", "جديده", "قابل", "قابله",
+    "يكون", "تكون", "الذي", "التي", "اللي", "ثم", "او",
+}
+
+
+def arabic_tokens(text: str) -> list[str]:
+    """Return normalized Arabic words for inexpensive language/topic sanity checks."""
+    text = re.sub(r"[\u064B-\u065F\u0670\u0640]", "", str(text))
+    text = text.translate(str.maketrans({
+        "أ": "ا", "إ": "ا", "آ": "ا", "ٱ": "ا",
+        "ى": "ي", "ة": "ه",
+    }))
+    return [
+        normalize_arabic_word(token)
+        for token in re.findall(r"[\u0621-\u064A]+", text)
+    ]
+
+
+def validate_narration_language_and_topic(scenes: list[dict], topic: str, is_story: bool):
+    """Fail closed if the model returns English text or drifts to another subject."""
+    for index, scene in enumerate(scenes, start=1):
+        narration = str(scene.get("narration", ""))
+        arabic_letters = len(re.findall(r"[\u0621-\u064A\u066E-\u06D3]", narration))
+        latin_letters = len(re.findall(r"[A-Za-z]", narration))
+        if arabic_letters < 15 or arabic_letters < latin_letters * 1.2:
+            raise ValueError(
+                f"Scene {index} narration must be Arabic (Egyptian Arabic); "
+                f"found {arabic_letters} Arabic letters and {latin_letters} Latin letters"
+            )
+
+    topic_source = topic
+    if is_story:
+        episode = parse_episode(topic)
+        topic_source = f'{episode["series"]} {episode["plot"]}'
+    topic_terms = {
+        word for word in arabic_tokens(topic_source)
+        if len(word) >= 3 and word not in ARABIC_TOPIC_STOPWORDS
+    }
+    if topic_terms:
+        narration_terms = set(arabic_tokens(" ".join(
+            str(scene.get("narration", "")) for scene in scenes
+        )))
+        matches = {
+            term for term in topic_terms
+            if any(term == word or term in word or word in term
+                   for word in narration_terms if min(len(term), len(word)) >= 3)
+        }
+        if not matches:
+            raise ValueError(
+                f"Generated narration does not match the requested topic: {topic}"
+            )
+
+
+def parse_json_response(raw: str, is_story: bool, topic: str = "") -> dict:
     text = raw.strip()
     text = re.sub(r"^```(?:json)?\s*", "", text, flags=re.IGNORECASE)
     text = re.sub(r"\s*```$", "", text)
@@ -98,6 +168,9 @@ def parse_json_response(raw: str, is_story: bool) -> dict:
     for index, scene in enumerate(scenes, start=1):
         if any(not str(scene.get(key, "")).strip() for key in required):
             raise ValueError(f"Scene {index} is missing required fields")
+
+    if topic:
+        validate_narration_language_and_topic(scenes, topic, is_story)
 
     # Use a literal excerpt from the narration for the caption. This prevents the
     # model from putting unrelated or malformed Arabic text in the black caption bar.
@@ -136,11 +209,12 @@ def build_prompt(topic: str) -> str:
 3) عامية مصرية سهلة.
 4) بالضبط 6 مشاهد، وإجمالي narration من 130 إلى 190 كلمة.
 5) كل مشهد يدفع القصة للأمام وينتهي بتشويق طبيعي.
-6) onscreen_text عربي فقط، من 4 إلى 8 كلمات ومأخوذ حرفيًا من narration نفسه.
-7) keywords إنجليزية من 4 إلى 7 كلمات، وتحتوي في كل مشهد على نفس وصف الشخصيات والمكان/الفعل.
-8) أعد JSON صحيح فقط بدون Markdown.
-9) title عربي ويحتوي اسم السلسلة ورقم الحلقة.
-10) description وtags عربية فقط.
+6) narration عربي مصري فقط في كل مشهد؛ ممنوع كتابة أي جملة بالإنجليزية.
+7) onscreen_text عربي فقط، من 4 إلى 8 كلمات ومأخوذ حرفيًا من narration نفسه.
+8) keywords إنجليزية من 4 إلى 7 كلمات، وتحتوي في كل مشهد على نفس وصف الشخصيات والمكان/الفعل.
+9) أعد JSON صحيح فقط بدون Markdown.
+10) title عربي ويحتوي اسم السلسلة ورقم الحلقة.
+11) description وtags عربية فقط.
 
 المفاتيح:
 title, description, tags, scenes
@@ -161,12 +235,13 @@ narration, onscreen_text, keywords
 2) اشرح الموضوع بطريقة بسيطة ومشوقة وبالعامية المصرية.
 3) بالضبط 9 مشاهد، وإجمالي narration من 285 إلى 310 كلمة حتى لا يتجاوز الفيديو 3 دقائق بعد تحويله إلى صوت.
 4) كل مشهد حوالي 28 إلى 38 كلمة، ويضيف معلومة جديدة أو يطوّر الشرح بدون تكرار.
-5) onscreen_text عربي فقط، من 4 إلى 8 كلمات ومأخوذ حرفيًا من narration نفسه.
-6) keywords إنجليزية من 4 إلى 7 كلمات تصف الشيء/المكان/الفعل الخاص بالمشهد، بدون أسماء شخصيات أو أوصاف رومانسية.
-7) أعد JSON صحيح فقط بدون Markdown.
-8) title عربي جذاب لا يزيد عن 80 حرفًا.
-9) description عربي فقط.
-10) tags من 5 إلى 8 وسوم عربية مناسبة.
+5) narration عربي مصري فقط في كل مشهد؛ ممنوع كتابة أي جملة بالإنجليزية.
+6) onscreen_text عربي فقط، من 4 إلى 8 كلمات ومأخوذ حرفيًا من narration نفسه.
+7) keywords إنجليزية من 4 إلى 7 كلمات تصف الشيء/المكان/الفعل الخاص بالمشهد، بدون أسماء شخصيات أو أوصاف رومانسية.
+8) أعد JSON صحيح فقط بدون Markdown.
+9) title عربي جذاب لا يزيد عن 80 حرفًا.
+10) description عربي فقط.
+11) tags من 5 إلى 8 وسوم عربية مناسبة.
 
 المفاتيح:
 title, description, tags, scenes
@@ -185,7 +260,7 @@ def request_generation(client: Groq, prompt: str):
     )
 
 
-def repair_json(client: Groq, raw: str, is_story: bool) -> dict:
+def repair_json(client: Groq, raw: str, is_story: bool, topic: str) -> dict:
     target = (
         "يجب أن يحتوي scenes على 6 مشاهد بالضبط.\n"
         "إجمالي narration من 130 إلى 190 كلمة، وكل مشهد من 18 إلى 35 كلمة."
@@ -196,8 +271,10 @@ def repair_json(client: Groq, raw: str, is_story: bool) -> dict:
         "كل مشهد من 28 إلى 38 كلمة، ويجب أن يضيف معلومة أو يطوّر الشرح بدون تكرار."
     )
     repair_prompt = (
-        "أصلح النص التالي وأعده كـ JSON صحيح نحويًا فقط.\n"
-        "مهم جدًا: لا تضف أي شرح أو Markdown. لا تغيّر الفكرة الأساسية إلا عند الحاجة لاستكمال الشروط.\n"
+        "أصلح النص التالي وأعده كـ JSON صحيح نحويًا فقط.\\n"
+        f"موضوع الفيديو الذي يجب الالتزام به في جميع المشاهد: {topic}\\n"
+        "مهم جدًا: narration بالعربية المصرية فقط في كل المشاهد؛ ممنوع أن يكون بالإنجليزية.\\n"
+        "لا تستبدل الموضوع بموضوع آخر. لا تضف أي شرح أو Markdown.\\n"
         "يجب أن يحتوي الناتج على: title, description, tags, scenes.\n"
         + target + "\n"
         + "كل مشهد يجب أن يكون كائنًا مستقلًا ويحتوي بالضبط على: narration, onscreen_text, keywords.\n"
@@ -214,24 +291,24 @@ def repair_json(client: Groq, raw: str, is_story: bool) -> dict:
         max_tokens=10000,
         response_format={"type": "json_object"},
     )
-    return parse_json_response(repaired.choices[0].message.content or "", is_story)
+    return parse_json_response(repaired.choices[0].message.content or "", is_story, topic)
 
 
-def generate_with_retry(client: Groq, prompt: str, is_story: bool) -> dict:
+def generate_with_retry(client: Groq, prompt: str, is_story: bool, topic: str) -> dict:
     last_error = None
     raw = ""
     for attempt in range(2):
         try:
             completion = request_generation(client, prompt)
             raw = completion.choices[0].message.content or ""
-            return parse_json_response(raw, is_story)
+            return parse_json_response(raw, is_story, topic)
         except Exception as error:
             last_error = error
             print(f"Generation attempt {attempt + 1} returned invalid JSON: {error}")
     for attempt in range(2):
         try:
             print(f"Sending JSON repair request ({attempt + 1}/2)...")
-            return repair_json(client, raw, is_story)
+            return repair_json(client, raw, is_story, topic)
         except Exception as error:
             last_error = error
             print(f"Repair attempt {attempt + 1} failed: {error}")
@@ -369,7 +446,7 @@ def main():
         data = build_faris_salma_episode_one()
         print("Using the continuity-checked Faris and Salma episode script.")
     else:
-        data = generate_with_retry(client, build_prompt(topic), is_story)
+        data = generate_with_retry(client, build_prompt(topic), is_story, topic)
 
     content_type = "story" if topic.strip().startswith("سلسلة:") else "knowledge"
     metadata = finalize_metadata(topic, data, is_story)
