@@ -112,7 +112,7 @@ jobs:
           if not subtitles.is_file() or subtitles.stat().st_size < 100:
               raise SystemExit("Arabic subtitles were not generated correctly.")
           result = subprocess.run(
-              ["ffprobe", "-v", "error", "-show_entries", "stream=width,height:format=duration",
+              ["ffprobe", "-v", "error", "-show_entries", "stream=codec_type,width,height:format=duration",
                "-of", "json", str(video)],
               check=True, capture_output=True, text=True
           )
@@ -137,7 +137,7 @@ jobs:
           if not video.is_file() or video.stat().st_size == 0:
               raise SystemExit("Landscape version was not created.")
           result = subprocess.run(
-              ["ffprobe", "-v", "error", "-show_entries", "stream=width,height:format=duration",
+              ["ffprobe", "-v", "error", "-show_entries", "stream=codec_type,width,height:format=duration",
                "-of", "json", str(video)],
               check=True, capture_output=True, text=True
           )
