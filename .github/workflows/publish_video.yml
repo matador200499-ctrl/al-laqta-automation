@@ -17,8 +17,7 @@ on:
         type: boolean
         default: false
 
-# يمنع تشغيل نسختين من النشر في نفس الوقت،
-# وبالتالي لا يمكن لتشغيلين قراءة نفس topics.txt وإنتاج نفس الفيديو.
+# يمنع تشغيل نسختين من النشر في نفس الوقت.
 concurrency:
   group: publish-video
   cancel-in-progress: false
@@ -54,7 +53,7 @@ jobs:
         env:
           MANUAL_TOPIC: ${{ inputs.manual_topic }}
         run: |
-          printf '%s\n' "$MANUAL_TOPIC" > manual_topic.txt
+          printf '%s\\n' "$MANUAL_TOPIC" > manual_topic.txt
           echo "Using a manually supplied topic; the topic queue will not be consumed."
 
       - name: Pick next topic
@@ -97,37 +96,68 @@ jobs:
           PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
         run: python scripts/fetch_clips.py
 
-      - name: Assemble video
+      - name: Assemble vertical Shorts master
         run: python scripts/assemble_video.py
 
-      - name: Verify final video is within the Shorts duration limit
+      - name: Verify vertical master and duration
         run: |
           python - <<'PY'
+          import json
           import subprocess
           from pathlib import Path
           video = Path("final_video.mp4")
           if not video.is_file() or video.stat().st_size == 0:
-              raise SystemExit("Final video is missing or empty.")
+              raise SystemExit("Vertical Shorts master is missing or empty.")
           subtitles = Path("captions_ar.srt")
           if not subtitles.is_file() or subtitles.stat().st_size < 100:
               raise SystemExit("Arabic subtitles were not generated correctly.")
           result = subprocess.run(
-              ["ffprobe", "-v", "error", "-show_entries", "format=duration",
-               "-of", "default=noprint_wrappers=1:nokey=1", str(video)],
+              ["ffprobe", "-v", "error", "-show_entries", "stream=width,height:format=duration",
+               "-of", "json", str(video)],
               check=True, capture_output=True, text=True
           )
-          duration = float(result.stdout.strip())
-          print("Final video duration: {:.2f} seconds".format(duration))
+          info = json.loads(result.stdout)
+          stream = next(s for s in info["streams"] if s.get("codec_type") == "video")
+          duration = float(info["format"]["duration"])
+          print("Shorts master: {}x{}, {:.2f} seconds".format(stream["width"], stream["height"], duration))
+          if (stream["width"], stream["height"]) != (1080, 1920):
+              raise SystemExit("Shorts master must be 1080x1920.")
           if duration <= 0 or duration > 179.8:
               raise SystemExit("Video is not safely within the 3-minute Shorts limit; refusing to upload.")
           PY
 
-      - name: Save video, metadata and captions preview artifact
+      - name: Create 16:9 regular-video version
+        run: |
+          ffmpeg -y -i final_video.mp4 -filter_complex "[0:v]split=2[bg][fg];[bg]scale=1920:1080:force_original_aspect_ratio=increase,crop=1920:1080,boxblur=24:12[background];[fg]scale=608:1080:force_original_aspect_ratio=decrease[foreground];[background][foreground]overlay=(W-w)/2:(H-h)/2,setsar=1,fps=25,format=yuv420p[video]" -map "[video]" -map "0:a?" -c:v libx264 -preset veryfast -crf 21 -c:a aac -b:a 192k -movflags +faststart -shortest landscape_video.mp4
+          python - <<'PY'
+          import json
+          import subprocess
+          from pathlib import Path
+          video = Path("landscape_video.mp4")
+          if not video.is_file() or video.stat().st_size == 0:
+              raise SystemExit("Landscape version was not created.")
+          result = subprocess.run(
+              ["ffprobe", "-v", "error", "-show_entries", "stream=width,height:format=duration",
+               "-of", "json", str(video)],
+              check=True, capture_output=True, text=True
+          )
+          info = json.loads(result.stdout)
+          stream = next(s for s in info["streams"] if s.get("codec_type") == "video")
+          duration = float(info["format"]["duration"])
+          print("Regular-video master: {}x{}, {:.2f} seconds".format(stream["width"], stream["height"], duration))
+          if (stream["width"], stream["height"]) != (1920, 1080):
+              raise SystemExit("Regular-video master must be 1920x1080 (16:9).")
+          if duration <= 0:
+              raise SystemExit("Regular-video master has invalid duration.")
+          PY
+
+      - name: Save both video versions, metadata and captions preview
         uses: actions/upload-artifact@v4
         with:
           name: generated-video-preview
           path: |
             final_video.mp4
+            landscape_video.mp4
             script.json
             content.json
             captions_ar.srt
@@ -135,15 +165,29 @@ jobs:
 
       - name: Explain dry run result
         if: ${{ inputs.dry_run == true }}
-        run: echo "Dry run complete. Video, metadata and Arabic subtitles are saved in the workflow artifact; no YouTube upload was attempted."
+        run: echo "Dry run complete. Vertical Shorts and horizontal 16:9 versions, metadata and Arabic subtitles are saved in the workflow artifact; no YouTube upload was attempted."
 
-      - name: Upload to YouTube
+      - name: Upload regular 16:9 video
+        if: ${{ inputs.dry_run != true }}
+        env:
+          YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
+          YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
+          YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
+          VIDEO_PATH: landscape_video.mp4
+          YOUTUBE_TITLE_SUFFIX: " | فيديو كامل"
+          UPLOAD_RESULT_PATH: upload_result_regular.json
+          PRIVACY_STATUS: public
+          CAPTION_REPAIR_RUN: ${{ github.event_name == 'push' && '1' || '0' }}
+        run: python scripts/upload_youtube.py
+
+      - name: Upload vertical YouTube Short
         if: ${{ inputs.dry_run != true }}
         env:
           YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
           YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
           YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
           VIDEO_PATH: final_video.mp4
+          UPLOAD_RESULT_PATH: upload_result_shorts.json
           PRIVACY_STATUS: public
           CAPTION_REPAIR_RUN: ${{ github.event_name == 'push' && '1' || '0' }}
         run: python scripts/upload_youtube.py
@@ -156,7 +200,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add topics.txt used_topics.txt
           if ! git diff --cached --quiet; then
-            git commit -m "Rotate published video topic"
+            git commit -m "Publish regular video and Short; rotate topic"
             for attempt in 1 2 3; do
               if git pull --rebase origin main && git push origin main; then
                 echo "Topic rotation saved successfully"
