@@ -53,7 +53,7 @@ jobs:
         env:
           MANUAL_TOPIC: ${{ inputs.manual_topic }}
         run: |
-          printf '%s\\n' "$MANUAL_TOPIC" > manual_topic.txt
+          printf '%s\n' "$MANUAL_TOPIC" > manual_topic.txt
           echo "Using a manually supplied topic; the topic queue will not be consumed."
 
       - name: Pick next topic
