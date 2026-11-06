@@ -1,9 +1,7 @@
 """
 upload_youtube.py
-يرفع فيديو على يوتيوب باستخدام YouTube Data API v3،
-معتمدًا على refresh token متولّد مسبقًا (بدون فتح متصفح).
-
-بيقرأ العنوان/الوصف/التاجز من content.json (الناتج من generate_content.py).
+يرفع نسخة فيديو واحدة على يوتيوب باستخدام YouTube Data API v3.
+يدعم تحديد ملف الفيديو وملف نتيجة مستقل لكل نسخة عبر متغيرات البيئة.
 """
 
 import os
@@ -40,34 +38,34 @@ def main():
 
     youtube = get_authenticated_service()
 
-    video_title = str(content.get("title", "فيديو جديد - اللقطة")).strip()
+    base_title = str(content.get("title", "فيديو جديد - اللقطة")).strip()
+    suffix = os.environ.get("YOUTUBE_TITLE_SUFFIX", "")
     if os.environ.get("CAPTION_REPAIR_RUN") == "1":
-        video_title = video_title[:80].rstrip() + " - النسخة النهائية"
+        suffix = " - النسخة النهائية" + suffix
+    video_title = base_title[:max(1, 100 - len(suffix))].rstrip() + suffix
 
     body = {
         "snippet": {
             "title": video_title,
             "description": content.get("description", ""),
             "tags": content.get("tags", []),
-            "categoryId": str(content.get("category_id", "24")),  # حسب نوع المحتوى
+            "categoryId": str(content.get("category_id", "24")),
         },
         "status": {
-            "privacyStatus": privacy_status,  # private / unlisted / public
+            "privacyStatus": privacy_status,
             "selfDeclaredMadeForKids": False,
-            # Official YouTube Data API field for declaring realistic synthetic media.
             "containsSyntheticMedia": bool(content.get("contains_synthetic_media", False)),
         },
     }
 
     media = MediaFileUpload(video_path, chunksize=-1, resumable=True, mimetype="video/*")
-
     request = youtube.videos().insert(
         part="snippet,status",
         body=body,
         media_body=media,
     )
 
-    print("جاري رفع الفيديو...")
+    print(f"جاري رفع الملف: {video_path}")
     response = None
     while response is None:
         status, response = request.next_chunk()
@@ -95,7 +93,8 @@ def main():
     if failure_reason:
         print(f"سبب الفشل: {failure_reason}")
 
-    with open("upload_result.json", "w", encoding="utf-8") as f:
+    result_path = os.environ.get("UPLOAD_RESULT_PATH", "upload_result.json")
+    with open(result_path, "w", encoding="utf-8") as f:
         json.dump(
             {
                 "video_id": video_id,
@@ -106,6 +105,8 @@ def main():
                 "upload_status": upload_status,
                 "rejection_reason": rejection_reason,
                 "failure_reason": failure_reason,
+                "video_path": video_path,
+                "title": video_title,
             },
             f,
             ensure_ascii=False,
