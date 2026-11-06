@@ -101,26 +101,37 @@ jobs:
 
       - name: Verify vertical master and duration
         run: |
+          set -euo pipefail
           python - <<'PY'
           import json
           import subprocess
           from pathlib import Path
+
           video = Path("final_video.mp4")
           if not video.is_file() or video.stat().st_size == 0:
               raise SystemExit("Vertical Shorts master is missing or empty.")
+
           subtitles = Path("captions_ar.srt")
           if not subtitles.is_file() or subtitles.stat().st_size < 100:
               raise SystemExit("Arabic subtitles were not generated correctly.")
+
           result = subprocess.run(
-              ["ffprobe", "-v", "error", "-show_entries", "stream=codec_type,width,height:format=duration",
-               "-of", "json", str(video)],
+              ["ffprobe", "-v", "error", "-select_streams", "v:0",
+               "-show_entries", "stream=width,height",
+               "-show_entries", "format=duration", "-of", "json", str(video)],
               check=True, capture_output=True, text=True
           )
           info = json.loads(result.stdout)
-          stream = next(s for s in info["streams"] if s.get("codec_type") == "video")
+          streams = info.get("streams") or []
+          if not streams:
+              raise SystemExit("ffprobe found no video stream in final_video.mp4. Probe output: " + result.stdout[:2000])
+
+          stream = streams[0]
+          width, height = int(stream["width"]), int(stream["height"])
           duration = float(info["format"]["duration"])
-          print("Shorts master: {}x{}, {:.2f} seconds".format(stream["width"], stream["height"], duration))
-          if (stream["width"], stream["height"]) != (1080, 1920):
+          print("Shorts master: {}x{}, {:.2f} seconds".format(width, height, duration))
+
+          if (width, height) != (1080, 1920):
               raise SystemExit("Shorts master must be 1080x1920.")
           if duration <= 0 or duration > 179.8:
               raise SystemExit("Video is not safely within the 3-minute Shorts limit; refusing to upload.")
