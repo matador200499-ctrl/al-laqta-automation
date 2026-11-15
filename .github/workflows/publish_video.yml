@@ -99,6 +99,19 @@ jobs:
       - name: Assemble vertical Shorts master
         run: python scripts/assemble_video.py
 
+      - name: Preserve full video and prepare Shorts cut
+        run: |
+          set -euo pipefail
+          cp final_video.mp4 full_video.mp4
+          duration=$(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 full_video.mp4)
+          echo "Full video duration: ${duration}s"
+          # Keep the complete version for the regular YouTube upload.
+          # Make a separate vertical cut with a safe margin below the 3-minute Shorts limit.
+          ffmpeg -y -i full_video.mp4 -t 170 -map 0:v:0 -map "0:a?" \
+            -c:v libx264 -preset veryfast -crf 21 -pix_fmt yuv420p \
+            -c:a aac -b:a 192k -movflags +faststart -shortest final_video.mp4
+          echo "Prepared full_video.mp4 and Shorts cut final_video.mp4 (maximum 170 seconds)."
+
       - name: Verify vertical master and duration
         run: |
           set -euo pipefail
@@ -110,6 +123,10 @@ jobs:
           video = Path("final_video.mp4")
           if not video.is_file() or video.stat().st_size == 0:
               raise SystemExit("Vertical Shorts master is missing or empty.")
+
+          full_video = Path("full_video.mp4")
+          if not full_video.is_file() or full_video.stat().st_size == 0:
+              raise SystemExit("Full-length regular video is missing or empty.")
 
           subtitles = Path("captions_ar.srt")
           if not subtitles.is_file() or subtitles.stat().st_size < 100:
@@ -133,13 +150,13 @@ jobs:
 
           if (width, height) != (1080, 1920):
               raise SystemExit("Shorts master must be 1080x1920.")
-          if duration <= 0 or duration > 179.8:
-              raise SystemExit("Video is not safely within the 3-minute Shorts limit; refusing to upload.")
+          if duration <= 0 or duration > 170.5:
+              raise SystemExit("Shorts cut must be 170 seconds or less; refusing Shorts upload.")
           PY
 
       - name: Create 16:9 regular-video version
         run: |
-          ffmpeg -y -i final_video.mp4 -filter_complex "[0:v]split=2[bg][fg];[bg]scale=1920:1080:force_original_aspect_ratio=increase,crop=1920:1080,boxblur=24:12[background];[fg]scale=608:1080:force_original_aspect_ratio=decrease[foreground];[background][foreground]overlay=(W-w)/2:(H-h)/2,setsar=1,fps=25,format=yuv420p[video]" -map "[video]" -map "0:a?" -c:v libx264 -preset veryfast -crf 21 -c:a aac -b:a 192k -movflags +faststart -shortest landscape_video.mp4
+          ffmpeg -y -i full_video.mp4 -filter_complex "[0:v]split=2[bg][fg];[bg]scale=1920:1080:force_original_aspect_ratio=increase,crop=1920:1080,boxblur=24:12[background];[fg]scale=608:1080:force_original_aspect_ratio=decrease[foreground];[background][foreground]overlay=(W-w)/2:(H-h)/2,setsar=1,fps=25,format=yuv420p[video]" -map "[video]" -map "0:a?" -c:v libx264 -preset veryfast -crf 21 -c:a aac -b:a 192k -movflags +faststart -shortest landscape_video.mp4
           python - <<'PY'
           import json
           import subprocess
@@ -168,6 +185,7 @@ jobs:
           name: generated-video-preview
           path: |
             final_video.mp4
+            full_video.mp4
             landscape_video.mp4
             script.json
             content.json
