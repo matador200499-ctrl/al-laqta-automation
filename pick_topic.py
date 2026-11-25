@@ -253,8 +253,20 @@ def ensure_topics_available() -> List[str]:
             )
         lines.extend(new_topics)
 
-    # The informational-topic generator intentionally excludes stories, so add fresh
-    # Omar and Salma episodes whenever the queue does not already contain three.
+    # Ensure the queue always contains informational videos even when the
+    # remaining committed queue contains only story episodes.
+    knowledge_topics = [topic for topic in lines if not is_story_topic(topic)]
+    if not knowledge_topics:
+        seen_knowledge = set(used_set)
+        seen_knowledge.update(lines)
+        for topic in FALLBACK_TOPICS:
+            if topic not in seen_knowledge:
+                lines.append(topic)
+                seen_knowledge.add(topic)
+        knowledge_topics = [topic for topic in lines if not is_story_topic(topic)]
+
+    # Keep only a small story reserve; stories are selected by the cadence logic
+    # in main(), not because the informational queue ran dry.
     preferred_story_count = sum(
         1 for topic in lines
         if re.search(r"^سلسلة\s*:\s*عمر\s*و\s*سلمى\s*\|", topic)
