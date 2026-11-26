@@ -219,7 +219,7 @@ def generate_topics_with_groq() -> List[str]:
 
 
 def ensure_topics_available() -> List[str]:
-    """Refresh the queue without repeating used topics and always keep story episodes queued."""
+    """Refresh the queue with informational topics only, without repeating used topics."""
     used = read_used_topics()
     used_set = set(used)
     lines = []
@@ -289,7 +289,7 @@ def ensure_topics_available() -> List[str]:
     with open(TOPICS_FILE, "w", encoding="utf-8") as f:
         f.write("\n".join(lines) + "\n")
 
-    print(f"تم تجهيز {len(lines)} موضوعًا في {TOPICS_FILE}، منها {sum(1 for x in lines if is_story_topic(x))} حلقات قصة.")
+    print(f"تم تجهيز {len(lines)} موضوعًا معلوماتيًا في {TOPICS_FILE}.")
     return lines
 
 
@@ -321,7 +321,7 @@ def main():
     else:
         raise RuntimeError("لا توجد مواضيع متاحة")
 
-    remaining = lines.copy()
+    remaining = knowledge_topics.copy()
     remaining.remove(topic)
 
     with open(TOPICS_FILE, "w", encoding="utf-8") as f:
