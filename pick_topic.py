@@ -31,8 +31,8 @@ def is_story_topic(value: str) -> bool:
         "بين قلبين", "موعد في المطر", "آخر فرصة", "صدفة العمر", "بعد الغياب",
     )
     return (
-        bool(re.match(r"^سلسلة\\s*:", normalized, re.UNICODE))
-        or bool(re.search(r"الحلقة\\s*\\d+", normalized, re.UNICODE))
+        normalized.startswith("سلسلة")
+        or "الحلقة" in normalized
         or any(marker in normalized for marker in serial_markers)
     )
 
@@ -202,6 +202,8 @@ def ensure_topics_available() -> List[str]:
             raw_lines = [line.strip() for line in f if line.strip()]
         seen = set()
         for topic in raw_lines:
+            if is_story_topic(topic):
+                continue
             if topic not in used_set and topic not in seen:
                 lines.append(topic)
                 seen.add(topic)
@@ -228,37 +230,10 @@ def ensure_topics_available() -> List[str]:
         lines.extend(new_topics)
 
 
-    # Keep only a small story reserve; stories are selected by the cadence logic
-    # in main(), not because the informational queue ran dry.
-    preferred_story_count = sum(
-        1 for topic in lines
-        if re.search(r"^سلسلة\s*:\s*عمر\s*و\s*سلمى\s*\|", topic)
-    )
-    if preferred_story_count < 3:
-        fresh_stories = build_next_story_topics(used + lines)
-        needed = 3 - preferred_story_count
-        existing = set(lines)
-        for topic in fresh_stories:
-            if topic not in existing:
-                lines.append(topic)
-                existing.add(topic)
-                needed -= 1
-            if needed <= 0:
-                break
-
-    # Always guarantee informational topics, even when the queue contains stories.
-    knowledge_topics = [topic for topic in lines if not is_story_topic(topic)]
-    if not knowledge_topics:
-        seen_knowledge = set(used_set)
-        seen_knowledge.update(lines)
-        for topic in FALLBACK_TOPICS:
-            if topic not in seen_knowledge:
-                lines.append(topic)
-                seen_knowledge.add(topic)
-        knowledge_topics = [topic for topic in lines if not is_story_topic(topic)]
-
+    # Remove any serial-story entries before saving the queue.
+    lines = [topic for topic in lines if not is_story_topic(topic)]
     if not lines:
-        raise RuntimeError("لا توجد مواضيع متاحة بعد إزالة العناوين المستخدمة.")
+        raise RuntimeError("لا توجد مواضيع معلوماتية متاحة بعد إزالة العناوين المستخدمة.")
 
     with open(TOPICS_FILE, "w", encoding="utf-8") as f:
         f.write("\n".join(lines) + "\n")
@@ -269,34 +244,12 @@ def ensure_topics_available() -> List[str]:
 
 def main():
     lines = ensure_topics_available()
+    knowledge_topics = [topic for topic in lines if not is_story_topic(topic)]
+    if not knowledge_topics:
+        raise RuntimeError("لا توجد مواضيع معلوماتية متاحة")
 
-    used = read_used_topics()
-    last_types = [is_story_topic(x) for x in used[-2:]]
-    # الجدول المطلوب: موضوعان معلوماتيان ثم حلقة قصة واحدة.
-    # إذا كانت آخر حلقتين معلوماتيتين، يأتي الدور التالي للقصة.
-    want_story = len(last_types) >= 2 and last_types[-1] is False and last_types[-2] is False
-
-    story_topics = [x for x in lines if is_story_topic(x)]
-    # Prefer the user's established Omar and Salma series when a story is due.
-    preferred_stories = [
-        x for x in story_topics
-        if re.search(r"^سلسلة\s*:\s*عمر\s*و\s*سلمى\s*\|", x)
-    ]
-    if preferred_stories:
-        story_topics = preferred_stories + [x for x in story_topics if x not in preferred_stories]
-    knowledge_topics = [x for x in lines if not is_story_topic(x)]
-
-    if want_story and story_topics:
-        topic = story_topics[0]
-    elif knowledge_topics:
-        topic = knowledge_topics[0]
-    elif story_topics:
-        topic = story_topics[0]
-    else:
-        raise RuntimeError("لا توجد مواضيع متاحة")
-
-    remaining = knowledge_topics.copy()
-    remaining.remove(topic)
+    topic = knowledge_topics[0]
+    remaining = knowledge_topics[1:]
 
     with open(TOPICS_FILE, "w", encoding="utf-8") as f:
         f.write("\n".join(remaining) + ("\n" if remaining else ""))
@@ -304,19 +257,18 @@ def main():
     with open(USED_FILE, "a", encoding="utf-8") as f:
         f.write(topic + "\n")
 
-    # نكتب الموضوع في متغير بيئة GitHub Actions
     github_env = os.environ.get("GITHUB_ENV")
     if github_env:
         with open(github_env, "a", encoding="utf-8") as f:
             f.write(f"VIDEO_TOPIC={topic}\n")
 
-    kind = "قصة" if is_story_topic(topic) else "معلوماتي"
-    print(f"نوع الفيديو: {kind}")
+    print("نوع الفيديو: معلوماتي")
     print(f"الموضوع المختار: {topic}")
     print(f"باقي {len(remaining)} موضوع في القائمة")
 
     if len(remaining) <= 4:
-        print("::notice::قائمة المواضيع أوشكت تخلص، هيتم توليد دفعة جديدة تلقائيًا في المرة الجاية اللي القائمة تفضى فيها")
+        print("::notice::قائمة المواضيع أوشكت تخلص، سيتم توليد دفعة جديدة عند الحاجة")
+
 
 if __name__ == "__main__":
     main()
