@@ -73,7 +73,9 @@ class TopicRotationTests(unittest.TestCase):
             self.assertEqual(published_topics[-1], "موضوع معلوماتي جديد أول")
             remaining_topics = topics_path.read_text(encoding="utf-8").splitlines()
             self.assertEqual(remaining_topics, ["موضوع معلوماتي جديد ثاني"])
-            self.assertTrue(all(not topic_module.is_story_topic(x) for x in remaining_topics))
+            self.assertTrue(
+                all(not topic_module.is_story_topic(x) for x in remaining_topics)
+            )
 
 
     def test_fallback_after_groq_quota_uses_unused_local_ideas(self):
