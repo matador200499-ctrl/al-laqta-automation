@@ -20,20 +20,12 @@ topic_module = load_module("pick_topic_for_test", "pick_topic.py")
 
 
 class TopicRotationTests(unittest.TestCase):
-    def test_fresh_omar_salma_episodes_advance_past_used_episodes(self):
-        used = [
-            "سلسلة: عمر وسلمى | الحلقة 1 | رسالة وصلت في وقت غلط",
-            "سلسلة: عمر وسلمى | الحلقة 2 | سر الصورة القديمة",
-            "سلسلة: عمر وسلمى | الحلقة 3 | القرار اللي غيّر كل حاجة",
-        ]
-        future = topic_module.build_next_story_topics(used)
-        self.assertEqual(len(future), 3)
-        self.assertTrue(future[0].startswith("سلسلة: عمر وسلمى | الحلقة 4 |"))
-        self.assertTrue(future[1].startswith("سلسلة: عمر وسلمى | الحلقة 5 |"))
-        self.assertTrue(future[2].startswith("سلسلة: عمر وسلمى | الحلقة 6 |"))
-        self.assertTrue(set(future).isdisjoint(set(used)))
+    def test_serial_story_detector_rejects_episodes(self):
+        self.assertTrue(topic_module.is_story_topic("سلسلة: عمر وسلمى | الحلقة 1 | رسالة وصلت في وقت غلط"))
+        self.assertTrue(topic_module.is_story_topic("عمر وسلمى الحلقة 4 | مكالمة من رقم مجهول"))
+        self.assertFalse(topic_module.is_story_topic("أسرار الحضارة المصرية القديمة"))
 
-    def test_picker_chooses_story_after_two_information_videos(self):
+    def test_picker_never_selects_story_topics_after_two_information_videos(self):
         import os
         import tempfile
 
@@ -78,7 +70,10 @@ class TopicRotationTests(unittest.TestCase):
                 else:
                     os.environ["GITHUB_EVENT_NAME"] = old_event_name
 
-            self.assertTrue(published_topics[-1].startswith("سلسلة: عمر وسلمى | الحلقة 4 |"))
+            self.assertEqual(published_topics[-1], "موضوع معلوماتي جديد أول")
+            remaining_topics = topics_path.read_text(encoding="utf-8").splitlines()
+            self.assertEqual(remaining_topics, ["موضوع معلوماتي جديد ثاني"])
+            self.assertTrue(all(not topic_module.is_story_topic(x) for x in remaining_topics)
 
 
     def test_fallback_after_groq_quota_uses_unused_local_ideas(self):
@@ -109,13 +104,11 @@ class TopicRotationTests(unittest.TestCase):
 
             self.assertIn("لماذا نرى قوس قزح بعد المطر؟", queue)
             self.assertTrue(set(queue).isdisjoint(set(used_history)))
-            self.assertEqual(
-                sum(1 for topic in queue if topic.startswith("سلسلة: عمر وسلمى | الحلقة ")),
-                3,
-            )
+            self.assertTrue(queue, "Unused informational fallback topics should remain")
+            self.assertTrue(all(not topic_module.is_story_topic(x) for x in queue))
 
 
-    def test_empty_topic_queue_refills_without_repeating_and_includes_stories(self):
+    def test_empty_topic_queue_refills_without_repeating_and_excludes_stories(self):
         import tempfile
 
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -147,9 +140,9 @@ class TopicRotationTests(unittest.TestCase):
 
             self.assertNotIn("معلومة علمية سبق نشرها", queue)
             self.assertIn("موضوع علمي جديد لم يُنشر", queue)
-            stories = [topic for topic in queue if topic.startswith("سلسلة: عمر وسلمى")]
-            self.assertEqual(len(stories), 3)
-            self.assertTrue(all("| الحلقة " in topic for topic in stories))
+            self.assertTrue(queue)
+            self.assertTrue(all(not topic_module.is_story_topic(x) for x in queue))
+            self.assertEqual(queue, ["موضوع علمي جديد لم يُنشر"])
             self.assertEqual(len(queue), len(set(queue)))
 
 
