@@ -34,7 +34,7 @@ class TopicQueueRegressionTests(unittest.TestCase):
             topics_path = Path(tmp) / "topics.txt"
             used_path = Path(tmp) / "used_topics.txt"
             topics_path.write_text("", encoding="utf-8")
-            used_path.write_text("\\n".join(pick_topic.FALLBACK_TOPICS) + "\\n", encoding="utf-8")
+            used_path.write_text("\n".join(pick_topic.FALLBACK_TOPICS) + "\n", encoding="utf-8")
 
             with patch.object(pick_topic, "TOPICS_FILE", str(topics_path)), \\
                  patch.object(pick_topic, "USED_FILE", str(used_path)), \\
