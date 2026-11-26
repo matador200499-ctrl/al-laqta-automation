@@ -216,16 +216,31 @@ def ensure_topics_available() -> List[str]:
         if not new_topics:
             print("Groq لم يوفر مواضيع جديدة؛ جاري استخدام القائمة المحلية البديلة.", file=sys.stderr)
             new_topics = []
+            # First use fallback ideas never used before. If the entire catalog
+            # was consumed, recycle older ideas while avoiding the last 30 topics.
             seen_fallback = set(used_set)
             for topic in FALLBACK_TOPICS:
-                if topic not in seen_fallback:
+                if topic not in seen_fallback and not is_story_topic(topic):
                     new_topics.append(topic)
                     seen_fallback.add(topic)
 
+            if not new_topics:
+                recent_used = set(used[-30:])
+                print(
+                    "تحذير: تم استهلاك كل الأفكار المحلية؛ إعادة تدوير أفكار قديمة "
+                    "مع منع تكرار آخر 30 موضوعًا.",
+                    file=sys.stderr,
+                )
+                seen_fallback = set(recent_used)
+                for topic in FALLBACK_TOPICS:
+                    if topic not in seen_fallback and not is_story_topic(topic):
+                        new_topics.append(topic)
+                        seen_fallback.add(topic)
+
         if not new_topics:
             raise RuntimeError(
-                "كل المواضيع المحلية البديلة استُخدمت وGroq لم يوفر مواضيع جديدة. "
-                "أضف أفكارًا جديدة إلى topics.txt أو تحقق من حصة GROQ_API_KEY."
+                "لا توجد موضوعات معلوماتية محلية متاحة حتى بعد تدوير القائمة؛ "
+                "أضف موضوعات جديدة أو قلل عدد الموضوعات المحمية من التكرار."
             )
         lines.extend(new_topics)
 
