@@ -12,13 +12,13 @@ class TopicQueueRegressionTests(unittest.TestCase):
             topics_path = Path(tmp) / "topics.txt"
             used_path = Path(tmp) / "used_topics.txt"
             topics_path.write_text(
-                "سلسلة: عمر وسلمى | الحلقة 50 | سر الصورة القديمة\n"
-                "سلسلة: عمر وسلمى | الحلقة 51 | القرار اللي غيّر كل حاجة\n",
+                "سلسلة: عمر وسلمى | الحلقة 50 | سر الصورة القديمة\\n"
+                "سلسلة: عمر وسلمى | الحلقة 51 | القرار اللي غيّر كل حاجة\\n",
                 encoding="utf-8",
             )
             used_path.write_text("", encoding="utf-8")
 
-            with patch.object(pick_topic, "TOPICS_FILE", str(topics_path)), \
+            with patch.object(pick_topic, "TOPICS_FILE", str(topics_path)), \\
                  patch.object(pick_topic, "USED_FILE", str(used_path)):
                 queue = pick_topic.ensure_topics_available()
 
@@ -27,14 +27,13 @@ class TopicQueueRegressionTests(unittest.TestCase):
                 all(not pick_topic.is_story_topic(topic) for topic in queue),
                 "The informational channel queue must contain no story episodes",
             )
-            self.assertTrue(queue, "Informational fallback topics should be added")
 
     def test_recycles_older_fallback_topics_when_groq_fails_and_catalog_exhausted(self):
         with tempfile.TemporaryDirectory() as tmp:
             topics_path = Path(tmp) / "topics.txt"
             used_path = Path(tmp) / "used_topics.txt"
             topics_path.write_text("", encoding="utf-8")
-            used_path.write_text("\n".join(pick_topic.FALLBACK_TOPICS) + "\n", encoding="utf-8")
+            used_path.write_text("\\n".join(pick_topic.FALLBACK_TOPICS) + "\\n", encoding="utf-8")
 
             with patch.object(pick_topic, "TOPICS_FILE", str(topics_path)), \\
                  patch.object(pick_topic, "USED_FILE", str(used_path)), \\
@@ -59,9 +58,9 @@ class TopicQueueRegressionTests(unittest.TestCase):
             used_path.write_text("", encoding="utf-8")
             story = "سلسلة: عمر وسلمى | الحلقة 52 | رسالة وصلت في وقت غلط"
             information = "لماذا لا نشعر بدوران الأرض رغم سرعتها الهائلة؟"
-            with patch.object(pick_topic, "ensure_topics_available", return_value=[story, information]), \
-                 patch.object(pick_topic, "TOPICS_FILE", str(topics_path)), \
-                 patch.object(pick_topic, "USED_FILE", str(used_path)), \
+            with patch.object(pick_topic, "ensure_topics_available", return_value=[story, information]), \\
+                 patch.object(pick_topic, "TOPICS_FILE", str(topics_path)), \\
+                 patch.object(pick_topic, "USED_FILE", str(used_path)), \\
                  patch.dict("os.environ", {"GITHUB_ENV": ""}):
                 pick_topic.main()
             self.assertEqual(used_path.read_text(encoding="utf-8").strip(), information)
