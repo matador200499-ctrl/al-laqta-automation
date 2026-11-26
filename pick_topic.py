@@ -23,44 +23,18 @@ GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
 GROQ_MODEL = os.environ.get("GROQ_MODEL", "openai/gpt-oss-120b")
 TOPICS_TO_GENERATE = int(os.environ.get("TOPICS_TO_GENERATE", "15"))
 
-STORY_PLOTS = [
-    "رسالة وصلت في وقت غلط",
-    "سر الصورة القديمة",
-    "القرار اللي غيّر كل حاجة",
-    "مكالمة من رقم مجهول",
-    "لقاء غير متوقع في محطة القطر",
-    "حقيقة ظهرت بعد غياب طويل",
-    "وعد قديم رجع في أصعب وقت",
-    "صورة كشفت سرًا مخفيًا",
-    "اختفاء مفاجئ قبل موعد مهم",
-    "مواجهة قلبت كل التوقعات",
-    "اعتراف اتأخر سنين",
-    "الرسالة اللي ماكانش المفروض تتفتح",
-]
-
-
 def is_story_topic(value: str) -> bool:
-    return value.strip().startswith("سلسلة:")
-
-
-def build_next_story_topics(used_topics: List[str]) -> List[str]:
-    """Always queue fresh Omar and Salma episodes without reusing an episode number."""
-    last_episode = 0
-    pattern = re.compile(r"^سلسلة\s*:\s*عمر\s*و\s*سلمى\s*\|\s*الحلقة\s*(\d+)", re.UNICODE)
-    for value in used_topics:
-        match = pattern.search(value.strip())
-        if match:
-            last_episode = max(last_episode, int(match.group(1)))
-
-    existing = set(used_topics)
-    topics = []
-    for episode in range(last_episode + 1, last_episode + 4):
-        plot = STORY_PLOTS[(episode - 1) % len(STORY_PLOTS)]
-        topic = f"سلسلة: عمر وسلمى | الحلقة {episode} | {plot}"
-        if topic not in existing:
-            topics.append(topic)
-    return topics
-
+    normalized = value.strip()
+    serial_markers = (
+        "عمر وسلمى", "عمر و سلمى", "عمر وليلى", "عمر و ليلى",
+        "سارة وآدم", "سارة و آدم", "حكاية على الكورنيش",
+        "بين قلبين", "موعد في المطر", "آخر فرصة", "صدفة العمر", "بعد الغياب",
+    )
+    return (
+        bool(re.match(r"^سلسلة\\s*:", normalized, re.UNICODE))
+        or bool(re.search(r"الحلقة\\s*\\d+", normalized, re.UNICODE))
+        or any(marker in normalized for marker in serial_markers)
+    )
 
 
 # قائمة بديلة محلية تستخدم لو فشل Groq
