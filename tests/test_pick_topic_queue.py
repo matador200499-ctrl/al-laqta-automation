@@ -24,9 +24,16 @@ class TopicQueueRegressionTests(unittest.TestCase):
 
             self.assertTrue(queue, "Queue should not be empty")
             self.assertTrue(
-                any(not pick_topic.is_story_topic(topic) for topic in queue),
-                "A story-only queue must be replenished with informational topics",
+                all(not pick_topic.is_story_topic(topic) for topic in queue),
+                "The informational channel queue must contain no story episodes",
             )
+            self.assertTrue(queue, "Informational fallback topics should be added")
+
+    def test_serial_story_topics_are_rejected_even_without_series_prefix(self):
+        self.assertTrue(pick_topic.is_story_topic("سلسلة: عمر وسلمى | الحلقة 50 | سر الصورة القديمة"))
+        self.assertTrue(pick_topic.is_story_topic("عمر وسلمى الحلقة 51 | القرار اللي غيّر كل حاجة"))
+        self.assertTrue(pick_topic.is_story_topic("سارة وآدم | الحلقة 2 | الحقيقة التي أخفاها آدم"))
+        self.assertFalse(pick_topic.is_story_topic("قصة صعود وسقوط الإمبراطورية: درس تاريخي"))
 
     def test_main_selects_only_information_topics_even_if_story_is_present(self):
         with tempfile.TemporaryDirectory() as tmp:
