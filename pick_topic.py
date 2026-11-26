@@ -253,17 +253,6 @@ def ensure_topics_available() -> List[str]:
             )
         lines.extend(new_topics)
 
-    # Ensure the queue always contains informational videos even when the
-    # remaining committed queue contains only story episodes.
-    knowledge_topics = [topic for topic in lines if not is_story_topic(topic)]
-    if not knowledge_topics:
-        seen_knowledge = set(used_set)
-        seen_knowledge.update(lines)
-        for topic in FALLBACK_TOPICS:
-            if topic not in seen_knowledge:
-                lines.append(topic)
-                seen_knowledge.add(topic)
-        knowledge_topics = [topic for topic in lines if not is_story_topic(topic)]
 
     # Keep only a small story reserve; stories are selected by the cadence logic
     # in main(), not because the informational queue ran dry.
@@ -282,6 +271,17 @@ def ensure_topics_available() -> List[str]:
                 needed -= 1
             if needed <= 0:
                 break
+
+    # Always guarantee informational topics, even when the queue contains stories.
+    knowledge_topics = [topic for topic in lines if not is_story_topic(topic)]
+    if not knowledge_topics:
+        seen_knowledge = set(used_set)
+        seen_knowledge.update(lines)
+        for topic in FALLBACK_TOPICS:
+            if topic not in seen_knowledge:
+                lines.append(topic)
+                seen_knowledge.add(topic)
+        knowledge_topics = [topic for topic in lines if not is_story_topic(topic)]
 
     if not lines:
         raise RuntimeError("لا توجد مواضيع متاحة بعد إزالة العناوين المستخدمة.")
