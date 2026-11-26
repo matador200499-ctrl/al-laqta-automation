@@ -28,11 +28,20 @@ class TopicQueueRegressionTests(unittest.TestCase):
                 "A story-only queue must be replenished with informational topics",
             )
 
-    def test_story_topics_are_not_used_as_information_fallback(self):
-        self.assertTrue(all(pick_topic.is_story_topic(topic) for topic in [
-            "سلسلة: عمر وسلمى | الحلقة 50 | سر الصورة القديمة",
-            "سلسلة: عمر وسلمى | الحلقة 51 | القرار اللي غيّر كل حاجة",
-        ]))
+    def test_main_selects_only_information_topics_even_if_story_is_present(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            topics_path = Path(tmp) / "topics.txt"
+            used_path = Path(tmp) / "used_topics.txt"
+            used_path.write_text("", encoding="utf-8")
+            story = "سلسلة: عمر وسلمى | الحلقة 52 | رسالة وصلت في وقت غلط"
+            information = "لماذا لا نشعر بدوران الأرض رغم سرعتها الهائلة؟"
+            with patch.object(pick_topic, "ensure_topics_available", return_value=[story, information]), \
+                 patch.object(pick_topic, "TOPICS_FILE", str(topics_path)), \
+                 patch.object(pick_topic, "USED_FILE", str(used_path)), \
+                 patch.dict("os.environ", {"GITHUB_ENV": ""}):
+                pick_topic.main()
+            self.assertEqual(used_path.read_text(encoding="utf-8").strip(), information)
+            self.assertNotIn(story, topics_path.read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":
