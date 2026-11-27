@@ -6,7 +6,7 @@ from groq import Groq
 
 
 MODEL = os.environ.get("GROQ_MODEL", "openai/gpt-oss-120b")
-DEFAULT_TOPIC = "سلسلة: عمر وليلى | الحلقة 1 | لقاء غير متوقع يغير كل شيء"
+DEFAULT_TOPIC = ""
 
 
 def get_topic() -> str:
@@ -20,7 +20,9 @@ def get_topic() -> str:
     queued_topic = os.environ.get("VIDEO_TOPIC", "").strip()
     if queued_topic:
         return queued_topic
-    return DEFAULT_TOPIC
+    if DEFAULT_TOPIC:
+        return DEFAULT_TOPIC
+    raise RuntimeError("VIDEO_TOPIC is missing: refusing to generate unintended story content")
 
 
 def parse_episode(topic: str):
