@@ -23,14 +23,41 @@ CHARACTER_QUERIES = [
     "young Arab couple close up faces visible cinematic"
 ]
 
+IRRELEVANT_VISUAL_TERMS = {
+    "camera", "cameras", "photography", "space shuttle", "spaceship",
+    "teamwork", "team work", "office", "business meeting", "street",
+    "city street", "road", "highway", "mountain road", "road trip",
+}
+
+
+def topic_visual_anchor(topic: str) -> str:
+    """Return a narrow English anchor so stock search cannot drift off-topic."""
+    normalized = str(topic or "").lower()
+    if any(term in normalized for term in ("نملة", "النمل", "النحلة", "النحل")):
+        return "ants insects colony"
+    if any(term in normalized for term in ("بطارية", "الكهرباء", "المغناطيس")):
+        return "battery electricity science"
+    if any(term in normalized for term in ("القمر", "النجوم", "الفضاء", "الكواكب")):
+        return "space astronomy science"
+    if any(term in normalized for term in ("الغيوم", "المطر", "البرق", "الرعد")):
+        return "weather nature science"
+    if any(term in normalized for term in ("النبات", "الأشجار", "الزهور")):
+        return "plants nature science"
+    return "documentary science nature"
+
 def is_story(script: dict) -> bool:
     return script.get("content_type") == "story" or str(script.get("topic", "")).strip().startswith("سلسلة:")
 
-def scene_query(scene: dict) -> str:
+def scene_query(scene: dict, topic: str = "") -> str:
     keywords = scene.get("keywords", "")
     if isinstance(keywords, list):
         keywords = " ".join(str(x) for x in keywords)
-    return str(keywords).strip() or "cinematic documentary footage"
+    words = str(keywords).strip().lower()
+    for term in IRRELEVANT_VISUAL_TERMS:
+        words = words.replace(term, " ")
+    words = " ".join(words.split())
+    anchor = topic_visual_anchor(topic)
+    return f"{anchor} {words}".strip()
 
 def find_best_video_file(video: dict) -> str | None:
     files = sorted(
@@ -107,7 +134,7 @@ def main():
     else:
         print("نوع المحتوى: معلوماتي — كل مشهد سيأخذ لقطة مناسبة لموضوعه.")
         for i, scene in enumerate(script["scenes"]):
-            query = scene_query(scene)
+            query = scene_query(scene, script.get("topic", ""))
             print(f"بحث Pexels للمشهد {i + 1}: {query}")
             url = search_clip(query)
             if not url:
