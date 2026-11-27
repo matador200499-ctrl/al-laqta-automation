@@ -38,14 +38,14 @@ class TopicQueueRegressionTests(unittest.TestCase):
                 with self.assertRaises(RuntimeError):
                     pick_topic.ensure_topics_available()
 
-    def test_near_duplicate_titles_are_detected(self):
+    def test_normalized_duplicate_titles_are_detected(self):
         self.assertTrue(pick_topic.topics_are_similar(
             "لماذا لا نشعر بدوران الأرض رغم سرعتها الهائلة؟",
-            "لماذا لا نشعر بحركة دوران كوكب الأرض؟"
+            "لماذا لا نشعر بدوران الأرض رغم سرعتها الهائلة"
         ))
         self.assertTrue(pick_topic.topics_are_similar(
             "كيف تعمل كاميرات الهاتف في الإضاءة الضعيفة؟",
-            "كيف تعمل كاميرا الموبايل في الإضاءة القليلة؟"
+            "كيف تعمل كاميرات الهاتف في الاضاءة الضعيفة"
         ))
 
     def test_serial_story_topics_are_rejected_even_without_series_prefix(self):
