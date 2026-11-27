@@ -27,7 +27,7 @@ class TopicQueueRegressionTests(unittest.TestCase):
                 "The informational channel queue must contain no story episodes",
             )
 
-    def test_recycles_older_fallback_topics_when_groq_fails_and_catalog_exhausted(self):
+    def test_fails_closed_when_no_unused_fallback_topics_remain(self):
         with tempfile.TemporaryDirectory() as tmp:
             topics_path = Path(tmp) / "topics.txt"
             used_path = Path(tmp) / "used_topics.txt"
@@ -35,12 +35,18 @@ class TopicQueueRegressionTests(unittest.TestCase):
             used_path.write_text("\n".join(pick_topic.FALLBACK_TOPICS) + "\n", encoding="utf-8")
 
             with patch.object(pick_topic, "TOPICS_FILE", str(topics_path)), patch.object(pick_topic, "USED_FILE", str(used_path)), patch.object(pick_topic, "generate_topics_with_groq", return_value=[]):
-                queue = pick_topic.ensure_topics_available()
+                with self.assertRaises(RuntimeError):
+                    pick_topic.ensure_topics_available()
 
-            recent = set(pick_topic.FALLBACK_TOPICS[-30:])
-            self.assertTrue(queue, "Fallback recycling must prevent topic-selection failure")
-            self.assertTrue(all(topic not in recent for topic in queue))
-            self.assertTrue(all(not pick_topic.is_story_topic(topic) for topic in queue))
+    def test_near_duplicate_titles_are_detected(self):
+        self.assertTrue(pick_topic.topics_are_similar(
+            "لماذا لا نشعر بدوران الأرض رغم سرعتها الهائلة؟",
+            "لماذا لا نشعر بحركة دوران كوكب الأرض؟"
+        ))
+        self.assertTrue(pick_topic.topics_are_similar(
+            "كيف تعمل كاميرات الهاتف في الإضاءة الضعيفة؟",
+            "كيف تعمل كاميرا الموبايل في الإضاءة القليلة؟"
+        ))
 
     def test_serial_story_topics_are_rejected_even_without_series_prefix(self):
         self.assertTrue(pick_topic.is_story_topic("سلسلة: عمر وسلمى | الحلقة 50 | سر الصورة القديمة"))
