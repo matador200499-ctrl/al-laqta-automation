@@ -57,7 +57,9 @@ def topics_are_similar(a: str, b: str) -> bool:
     ratio = SequenceMatcher(None, na, nb).ratio()
     ta, tb = set(na.split()), set(nb.split())
     overlap = len(ta & tb) / max(1, len(ta | tb))
-    return ratio >= 0.78 or overlap >= 0.72
+    # Generic words such as "موضوع" and "معلوماتي" must not make unrelated
+    # titles collide; use a high-confidence threshold for near duplicates.
+    return ratio >= 0.90 or overlap >= 0.80
 
 
 # قائمة بديلة محلية تستخدم لو فشل Groq
@@ -304,7 +306,11 @@ def ensure_topics_available() -> List[str]:
         for topic in raw_lines:
             if is_story_topic(topic):
                 continue
-            if topic not in used_set and topic not in seen:
+            if (
+                topic not in used_set
+                and not any(topics_are_similar(topic, prior) for prior in used)
+                and topic not in seen
+            ):
                 lines.append(topic)
                 seen.add(topic)
 
