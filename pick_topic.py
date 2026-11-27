@@ -37,6 +37,29 @@ def is_story_topic(value: str) -> bool:
     )
 
 
+
+def normalize_topic(value: str) -> str:
+    value = value.strip().lower()
+    value = re.sub(r"[أإآ]", "ا", value)
+    value = re.sub(r"ى", "ي", value)
+    value = re.sub(r"[ـ\u064B-\u065F\u0670]", "", value)
+    value = re.sub(r"[^\w\s]", " ", value)
+    return " ".join(value.split())
+
+
+def topics_are_similar(a: str, b: str) -> bool:
+    from difflib import SequenceMatcher
+    na, nb = normalize_topic(a), normalize_topic(b)
+    if not na or not nb:
+        return False
+    if na == nb:
+        return True
+    ratio = SequenceMatcher(None, na, nb).ratio()
+    ta, tb = set(na.split()), set(nb.split())
+    overlap = len(ta & tb) / max(1, len(ta | tb))
+    return ratio >= 0.78 or overlap >= 0.72
+
+
 # قائمة بديلة محلية تستخدم لو فشل Groq
 FALLBACK_TOPICS = [
     "لماذا لا نشعر بدوران الأرض رغم سرعتها الهائلة؟",
@@ -117,10 +140,10 @@ def generate_topics_with_groq() -> List[str]:
         return []
 
     used = read_used_topics()
-    used_recent = used[-30:]
+    used_recent = used[-250:]
     avoid_text = ""
     if used_recent:
-        avoid_text = "\nمواضيع اتغطت قبل كده وممنوع تكررها:\n- " + "\n- ".join(used_recent)
+        avoid_text = "\nمواضيع سبق استخدامها وممنوع تكررها حتى بصياغة مختلفة:\n- " + "\n- ".join(used_recent)
 
     prompt = (
         f"اقترح {TOPICS_TO_GENERATE} أفكار جديدة لفيديوهات معلوماتية قصيرة عن العلوم والتاريخ والفضاء والتكنولوجيا والغرائب والألغاز.\n"
@@ -176,13 +199,15 @@ def generate_topics_with_groq() -> List[str]:
         return []
 
     new_topics = [line.strip(" -\t") for line in content.splitlines() if line.strip()]
-    used_set = set(used)
     unique_topics = []
-    seen = set(used_set)
     for topic in new_topics:
-        if topic not in seen and not is_story_topic(topic):
-            unique_topics.append(topic)
-            seen.add(topic)
+        if is_story_topic(topic):
+            continue
+        if any(topics_are_similar(topic, prior) for prior in used):
+            continue
+        if any(topics_are_similar(topic, prior) for prior in unique_topics):
+            continue
+        unique_topics.append(topic)
     new_topics = unique_topics
 
     if not new_topics:
@@ -216,26 +241,15 @@ def ensure_topics_available() -> List[str]:
         if not new_topics:
             print("Groq لم يوفر مواضيع جديدة؛ جاري استخدام القائمة المحلية البديلة.", file=sys.stderr)
             new_topics = []
-            # First use fallback ideas never used before. If the entire catalog
-            # was consumed, recycle older ideas while avoiding the last 30 topics.
-            seen_fallback = set(used_set)
+            # Never recycle topics. Filter exact and near duplicates against history.
             for topic in FALLBACK_TOPICS:
-                if topic not in seen_fallback and not is_story_topic(topic):
-                    new_topics.append(topic)
-                    seen_fallback.add(topic)
-
-            if not new_topics:
-                recent_used = set(used[-30:])
-                print(
-                    "تحذير: تم استهلاك كل الأفكار المحلية؛ إعادة تدوير أفكار قديمة "
-                    "مع منع تكرار آخر 30 موضوعًا.",
-                    file=sys.stderr,
-                )
-                seen_fallback = set(recent_used)
-                for topic in FALLBACK_TOPICS:
-                    if topic not in seen_fallback and not is_story_topic(topic):
-                        new_topics.append(topic)
-                        seen_fallback.add(topic)
+                if is_story_topic(topic):
+                    continue
+                if any(topics_are_similar(topic, prior) for prior in used):
+                    continue
+                if any(topics_are_similar(topic, prior) for prior in new_topics):
+                    continue
+                new_topics.append(topic)
 
         if not new_topics:
             raise RuntimeError(
