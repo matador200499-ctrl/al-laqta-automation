@@ -1,0 +1,67 @@
+name: Publish Watchdog
+
+on:
+  # GitHub documents that scheduled events may be delayed or dropped under load.
+  # This frequent, lightweight check makes the publisher self-healing.
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  check-publish-freshness:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Dispatch overdue publish if needed
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          now=$(date -u +%s)
+          latest_success=$(gh run list \
+            --repo "$REPOSITORY" \
+            --workflow publish_video.yml \
+            --status success \
+            --limit 1 \
+            --json createdAt \
+            --jq '.[0].createdAt // ""')
+
+          if [ -n "$latest_success" ]; then
+            latest_epoch=$(date -u -d "$latest_success" +%s)
+            age=$((now - latest_epoch))
+            echo "Last successful publish: $latest_success (${age}s ago)"
+          else
+            age=999999999
+            echo "No successful publish found; the publisher is overdue."
+          fi
+
+          active_runs=$(gh run list \
+            --repo "$REPOSITORY" \
+            --workflow publish_video.yml \
+            --limit 20 \
+            --json status \
+            --jq '[.[] | select(.status == "queued" or .status == "in_progress")] | length')
+          echo "Active publisher runs: $active_runs"
+
+          if [ "$active_runs" -gt 0 ]; then
+            echo "A publisher run is already queued or running; no dispatch needed."
+            exit 0
+          fi
+
+          # Three hours is the intended publishing interval. The next 15-minute
+          # watchdog tick will retry automatically if GitHub drops this dispatch.
+          if [ "$age" -ge 10800 ]; then
+            echo "Publisher is overdue by ${age}s; dispatching a real publish run."
+            gh workflow run publish_video.yml \
+              --repo "$REPOSITORY" \
+              --ref main \
+              -f dry_run=false
+          else
+            echo "Publisher is fresh; no action needed."
+          fi
