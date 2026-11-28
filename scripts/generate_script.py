@@ -191,6 +191,47 @@ def parse_json_response(raw: str, is_story: bool, topic: str = "") -> dict:
     return data
 
 
+def parse_and_repair_word_budget(raw: str, is_story: bool, topic: str) -> dict:
+    """Accept small model word-count overshoots by trimming trailing words."""
+    text = raw.strip()
+    text = re.sub(r"^```(?:json)?\s*", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"\s*```$", "", text)
+    start = text.find("{")
+    end = text.rfind("}")
+    if start == -1 or end == -1 or end <= start:
+        raise ValueError("Groq response did not contain a JSON object")
+    data = json.loads(text[start:end + 1])
+    scenes = data.get("scenes")
+    expected_scenes = 6 if is_story else 9
+    if not isinstance(scenes, list) or len(scenes) != expected_scenes:
+        raise ValueError(f"Generated JSON must contain exactly {expected_scenes} scenes")
+
+    min_scene, max_scene = (18, 35) if is_story else (28, 38)
+    min_total, max_total = (130, 190) if is_story else (280, 310)
+    for scene in scenes:
+        words = str(scene.get("narration", "")).split()
+        if len(words) > max_scene:
+            scene["narration"] = " ".join(words[:max_scene])
+
+    total = sum(len(str(scene.get("narration", "")).split()) for scene in scenes)
+    while total > max_total:
+        changed = False
+        for scene in reversed(scenes):
+            words = str(scene.get("narration", "")).split()
+            if len(words) > min_scene:
+                scene["narration"] = " ".join(words[:-1])
+                total -= 1
+                changed = True
+                if total <= max_total:
+                    break
+        if not changed:
+            break
+
+    if total < min_total:
+        raise ValueError(f"Word-budget repair could not reach {min_total}-{max_total} words, got {total}")
+    return parse_json_response(json.dumps(data, ensure_ascii=False), is_story, topic)
+
+
 def build_prompt(topic: str) -> str:
     info = parse_episode(topic)
     is_story = topic.strip().startswith("سلسلة:")
@@ -294,7 +335,12 @@ def repair_json(client: Groq, raw: str, is_story: bool, topic: str) -> dict:
         max_tokens=10000,
         response_format={"type": "json_object"},
     )
-    return parse_json_response(repaired.choices[0].message.content or "", is_story, topic)
+    repaired_raw = repaired.choices[0].message.content or ""
+    try:
+        return parse_json_response(repaired_raw, is_story, topic)
+    except Exception as validation_error:
+        print(f"Strict repair validation failed: {validation_error}; applying bounded word-budget repair.")
+        return parse_and_repair_word_budget(repaired_raw, is_story, topic)
 
 
 def generate_with_retry(client: Groq, prompt: str, is_story: bool, topic: str) -> dict:

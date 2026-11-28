@@ -6,6 +6,9 @@ on:
   schedule:
     - cron: "*/15 * * * *"
   workflow_dispatch:
+  workflow_run:
+    workflows: ["Publish Video (Automated)"]
+    types: [completed]
 
 permissions:
   actions: write
@@ -49,6 +52,12 @@ jobs:
             --jq '[.[] | select(.status == "queued" or .status == "in_progress")] | length')
           echo "Active publisher runs: $active_runs"
 
+          failed_publish="false"
+          if [ "${{ github.event_name }}" = "workflow_run" ] && [ "${{ github.event.workflow_run.conclusion }}" = "failure" ]; then
+            failed_publish="true"
+            echo "The publisher just failed; dispatching a recovery attempt."
+          fi
+
           if [ "$active_runs" -gt 0 ]; then
             echo "A publisher run is already queued or running; no dispatch needed."
             exit 0
@@ -56,7 +65,7 @@ jobs:
 
           # Three hours is the intended publishing interval. The next 15-minute
           # watchdog tick will retry automatically if GitHub drops this dispatch.
-          if [ "$age" -ge 10800 ]; then
+          if [ "$failed_publish" = "true" ] || [ "$age" -ge 10800 ]; then
             echo "Publisher is overdue by ${age}s; dispatching a real publish run."
             gh workflow run publish_video.yml \
               --repo "$REPOSITORY" \
